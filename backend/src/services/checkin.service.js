@@ -31,8 +31,8 @@ const triggerWill = async (willId, userId) => {
             [token, expires, ben.id]
         );
 
-        await emailService.sendBeneficiaryNotification(ben.email, ben.name, token);
-        console.log(`📧 Notified beneficiary: ${ben.email} — token: ${token}`);
+        await emailService.sendBeneficiaryNotification(ben.email, ben.name, token, ben.id);
+        console.log(`📧 Notified beneficiary: ${ben.email}`);
     }
 
     await pool.query(

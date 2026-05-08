@@ -1,5 +1,6 @@
 const pool = require('../config/database');
 const { runCheckinCheck } = require('../services/checkin.service');
+const emailService = require('../services/email.service');
 
 const isMinutes = process.env.TIME_UNIT === 'minutes';
 
@@ -181,7 +182,8 @@ const getTriggeredWills = async (req, res) => {
                     access_url: b.access_token
                         ? `${process.env.FRONTEND_URL}/access/${b.access_token}`
                         : null,
-                    token_valid: b.token_expires ? new Date(b.token_expires) > new Date() : false
+                    token_valid:   b.token_expires ? new Date(b.token_expires) > new Date() : false,
+                    email_preview: emailService.getPreview(b.id)
                 }))
             });
         }
@@ -192,7 +194,17 @@ const getTriggeredWills = async (req, res) => {
     }
 };
 
+const getEmailMode = (req, res) => {
+    res.json({
+        success: true,
+        data: {
+            configured: emailService.isGmailConfigured(),
+            mode: emailService.isGmailConfigured() ? 'gmail' : 'ethereal'
+        }
+    });
+};
+
 module.exports = {
     getAllUsers, toggleUserStatus, changeUserRole, getAuditLogs, getStats,
-    forceCheck, resetCheckin, resetWill, getTimeUnit, getTriggeredWills
+    forceCheck, resetCheckin, resetWill, getTimeUnit, getTriggeredWills, getEmailMode
 };

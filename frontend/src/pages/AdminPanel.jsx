@@ -9,6 +9,7 @@ const AdminPanel = () => {
     const [logs,           setLogs]          = useState([]);
     const [stats,          setStats]         = useState(null);
     const [timeUnit,       setTimeUnit]      = useState('days');
+    const [emailMode,      setEmailMode]     = useState('ethereal');
     const [triggeredWills, setTriggeredWills] = useState([]);
     const [loading,        setLoading]       = useState(true);
     const [testMsg,        setTestMsg]       = useState('');
@@ -24,12 +25,14 @@ const AdminPanel = () => {
             api.get('/admin/logs'),
             api.get('/admin/stats'),
             api.get('/admin/time-unit'),
+            api.get('/admin/email-mode'),
             api.get('/admin/triggered-wills')
-        ]).then(([u, l, s, t, tw]) => {
+        ]).then(([u, l, s, t, em, tw]) => {
             setUsers(u.data.data);
             setLogs(l.data.data);
             setStats(s.data.data);
             setTimeUnit(t.data.data.time_unit);
+            setEmailMode(em.data.data.mode);
             setTriggeredWills(tw.data.data);
         }).finally(() => setLoading(false));
     }, []);
@@ -245,6 +248,28 @@ const AdminPanel = () => {
                     {/* Test Tab */}
                     {tab === 'test' && (
                         <div className="space-y-6">
+                            {/* Email mode badge */}
+                            <div className={`card border-2 ${emailMode === 'gmail' ? 'border-green-300 bg-green-50' : 'border-amber-300 bg-amber-50'}`}>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-3xl">{emailMode === 'gmail' ? '✅' : '🧪'}</span>
+                                    <div>
+                                        <p className="font-bold text-gray-800">
+                                            وضع الإيميل: {emailMode === 'gmail' ? 'Gmail حقيقي' : 'Ethereal (تيست)'}
+                                        </p>
+                                        <p className="text-sm text-gray-600 mt-0.5">
+                                            {emailMode === 'gmail'
+                                                ? 'الإيميل هيوصل فعلاً للوارث على إيميله الحقيقي.'
+                                                : 'الإيميل مش بيتبعت حقيقي — بعد التفعيل اضغط "📧 عرض الإيميل" في الوصايا المُفعَّلة أدناه.'}
+                                        </p>
+                                        {emailMode === 'ethereal' && (
+                                            <p className="text-xs text-amber-700 mt-1">
+                                                لتفعيل Gmail الحقيقي: حدّث EMAIL_USER و EMAIL_PASS في backend/.env
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* Mode badge */}
                             <div className={`card border-2 ${isMinutes ? 'border-purple-300 bg-purple-50' : 'border-gray-200'}`}>
                                 <div className="flex items-center gap-3">
@@ -356,7 +381,7 @@ const AdminPanel = () => {
                                                                     <p className="text-xs text-gray-500">{b.email}</p>
                                                                 </div>
                                                                 {b.access_url ? (
-                                                                    <div className="flex items-center gap-2 shrink-0">
+                                                                    <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                                                                         {b.token_valid ? (
                                                                             <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">صالح</span>
                                                                         ) : (
@@ -370,6 +395,16 @@ const AdminPanel = () => {
                                                                         >
                                                                             افتح الوصية
                                                                         </a>
+                                                                        {b.email_preview && (
+                                                                            <a
+                                                                                href={b.email_preview}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="text-xs bg-amber-500 text-white hover:bg-amber-600 px-3 py-1.5 rounded font-medium transition-colors"
+                                                                            >
+                                                                                📧 عرض الإيميل
+                                                                            </a>
+                                                                        )}
                                                                     </div>
                                                                 ) : (
                                                                     <span className="text-xs text-gray-400">لم يُبلَّغ بعد</span>
