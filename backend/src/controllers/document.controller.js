@@ -1,4 +1,5 @@
 const pool = require('../config/database');
+const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const { generateHash, signHash } = require('../services/signature.service');
 
@@ -27,22 +28,16 @@ const uploadDocument = async (req, res) => {
         const hash = generateHash(fileBuffer);
         const signature = signHash(hash);
 
-        const result = await pool.query(
+        const id = uuidv4();
+        await pool.query(
             `INSERT INTO documents
-             (will_id, original_name, stored_name, stored_path, file_size, mime_type, sha256_hash, signature)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-            [
-                will_id,
-                req.file.originalname,
-                req.file.filename,
-                req.file.path,
-                req.file.size,
-                req.file.mimetype,
-                hash,
-                signature
-            ]
+             (id, will_id, original_name, stored_name, stored_path, file_size, mime_type, sha256_hash, signature)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [id, will_id, req.file.originalname, req.file.filename, req.file.path,
+             req.file.size, req.file.mimetype, hash, signature]
         );
 
+        const result = await pool.query('SELECT * FROM documents WHERE id = $1', [id]);
         res.status(201).json({ success: true, data: result.rows[0] });
     } catch (error) {
         if (req.file?.path) { try { fs.unlinkSync(req.file.path); } catch (_) {} }
@@ -100,18 +95,20 @@ const deleteDocument = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const result = await pool.query(
-            `DELETE FROM documents
-             WHERE id = $1 AND will_id IN (SELECT id FROM wills WHERE user_id = $2)
-             RETURNING *`,
+        // SELECT first to get stored_path before deleting
+        const existing = await pool.query(
+            `SELECT d.* FROM documents d
+             JOIN wills w ON d.will_id = w.id
+             WHERE d.id = $1 AND w.user_id = $2`,
             [id, req.user.id]
         );
 
-        if (result.rows.length === 0) {
+        if (existing.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'الملف غير موجود' });
         }
 
-        try { fs.unlinkSync(result.rows[0].stored_path); } catch (_) {}
+        await pool.query('DELETE FROM documents WHERE id = $1', [id]);
+        try { fs.unlinkSync(existing.rows[0].stored_path); } catch (_) {}
 
         res.json({ success: true, message: 'تم حذف الملف بنجاح' });
     } catch (error) {

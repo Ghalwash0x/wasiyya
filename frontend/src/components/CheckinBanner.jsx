@@ -1,40 +1,56 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 
 const CheckinBanner = () => {
-    const [status, setStatus] = useState(null);
+    const [status, setStatus]   = useState(null);
     const [checking, setChecking] = useState(false);
 
-    useEffect(() => {
-        api.get('/checkin/status')
-            .then(res => setStatus(res.data.data))
-            .catch(() => {});
+    const fetchStatus = useCallback(async () => {
+        try {
+            const res = await api.get('/checkin/status');
+            setStatus(res.data.data);
+        } catch (_) {}
     }, []);
+
+    useEffect(() => {
+        fetchStatus();
+        // auto-refresh: every 30s in minutes-mode, every 5 min otherwise
+        const interval = setInterval(fetchStatus, 30_000);
+        return () => clearInterval(interval);
+    }, [fetchStatus]);
 
     const handleCheckin = async () => {
         setChecking(true);
         try {
             await api.post('/checkin');
-            const res = await api.get('/checkin/status');
-            setStatus(res.data.data);
+            await fetchStatus();
         } catch (_) {}
         setChecking(false);
     };
 
-    if (!status || !status.is_overdue && status.days_remaining > 7) return null;
+    if (!status) return null;
 
-    const isWarning = status.days_remaining <= 7 && !status.is_overdue;
+    const unit = status.time_unit === 'minutes' ? 'دقيقة' : 'يوم';
+    const showBanner = status.is_overdue || status.days_remaining <= (status.time_unit === 'minutes' ? 3 : 7);
+    if (!showBanner) return null;
+
     const isOverdue = status.is_overdue;
 
     return (
-        <div className={`p-3 text-center text-sm font-medium ${isOverdue ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
-            {isOverdue
-                ? `⚠️ لم تجدد وجودك منذ ${status.days_since_checkin} يوماً — قد يتم تفعيل وصيتك قريباً!`
-                : `🔔 تجديد الوجود: متبقي ${status.days_remaining} يوم`}
+        <div className={`px-4 py-2.5 text-center text-sm font-medium flex items-center justify-center gap-3 flex-wrap
+            ${isOverdue ? 'bg-red-100 text-red-800 border-b border-red-200' : 'bg-amber-50 text-amber-800 border-b border-amber-200'}`}>
+            <span>
+                {isOverdue
+                    ? `⚠️ لم تجدد وجودك منذ ${status.elapsed} ${unit} — الوصية قد تُفعَّل قريباً!`
+                    : `🔔 تذكير: متبقي ${status.days_remaining} ${unit} على تجديد وجودك`}
+            </span>
             <button
                 onClick={handleCheckin}
                 disabled={checking}
-                className="mr-3 bg-white px-3 py-1 rounded-md text-xs font-semibold border border-current"
+                className={`px-3 py-1 rounded-md text-xs font-semibold border transition-colors
+                    ${isOverdue
+                        ? 'bg-red-600 text-white border-red-600 hover:bg-red-700'
+                        : 'bg-white text-amber-800 border-amber-400 hover:bg-amber-50'}`}
             >
                 {checking ? '...' : 'أنا بخير ✓'}
             </button>

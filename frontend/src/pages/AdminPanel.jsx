@@ -4,21 +4,30 @@ import Navbar from '../components/Navbar';
 import api from '../services/api';
 
 const AdminPanel = () => {
-    const [tab, setTab]       = useState('users');
-    const [users, setUsers]   = useState([]);
-    const [logs, setLogs]     = useState([]);
-    const [stats, setStats]   = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [tab,       setTab]     = useState('users');
+    const [users,     setUsers]   = useState([]);
+    const [logs,      setLogs]    = useState([]);
+    const [stats,     setStats]   = useState(null);
+    const [timeUnit,  setTimeUnit] = useState('days');
+    const [loading,   setLoading] = useState(true);
+    const [testMsg,   setTestMsg] = useState('');
+    const [testLoading, setTestLoading] = useState('');
+    const [agoValues, setAgoValues] = useState({});
+
+    const isMinutes = timeUnit === 'minutes';
+    const unit = isMinutes ? 'دقيقة' : 'يوم';
 
     useEffect(() => {
         Promise.all([
             api.get('/admin/users'),
             api.get('/admin/logs'),
-            api.get('/admin/stats')
-        ]).then(([u, l, s]) => {
+            api.get('/admin/stats'),
+            api.get('/admin/time-unit')
+        ]).then(([u, l, s, t]) => {
             setUsers(u.data.data);
             setLogs(l.data.data);
             setStats(s.data.data);
+            setTimeUnit(t.data.data.time_unit);
         }).finally(() => setLoading(false));
     }, []);
 
@@ -32,10 +41,58 @@ const AdminPanel = () => {
         setUsers(prev => prev.map(u => u.id === id ? { ...u, role: r.data.data.role } : u));
     };
 
-    if (loading) return <div className="flex min-h-screen"><Sidebar /><div className="p-10 text-gray-500">جاري التحميل...</div></div>;
+    const forceCheck = async () => {
+        setTestLoading('check');
+        setTestMsg('');
+        try {
+            const r = await api.post('/admin/force-check');
+            setTestMsg(`✅ ${r.data.message}`);
+            // reload users after check
+            const u = await api.get('/admin/users');
+            setUsers(u.data.data);
+            const s = await api.get('/admin/stats');
+            setStats(s.data.data);
+        } catch (err) {
+            setTestMsg(`❌ ${err.response?.data?.message || 'خطأ'}`);
+        }
+        setTestLoading('');
+    };
+
+    const resetCheckin = async (userId) => {
+        const ago = agoValues[userId] || 5;
+        setTestLoading(userId);
+        setTestMsg('');
+        try {
+            const r = await api.post(`/admin/reset-checkin/${userId}?ago=${ago}`);
+            setTestMsg(`✅ ${r.data.message}`);
+            const u = await api.get('/admin/users');
+            setUsers(u.data.data);
+        } catch (err) {
+            setTestMsg(`❌ ${err.response?.data?.message || 'خطأ'}`);
+        }
+        setTestLoading('');
+    };
+
+    if (loading) return (
+        <div className="flex min-h-screen">
+            <Sidebar />
+            <div className="flex-1 flex items-center justify-center text-gray-400">
+                <div className="text-center">
+                    <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                    <p>جاري التحميل...</p>
+                </div>
+            </div>
+        </div>
+    );
+
+    const tabs = [
+        ['users', 'المستخدمون'],
+        ['logs',  'سجلات النظام'],
+        ['test',  `🧪 التيست${isMinutes ? ' (دقائق)' : ''}`],
+    ];
 
     return (
-        <div className="flex min-h-screen">
+        <div className="flex min-h-screen bg-gray-50">
             <Sidebar />
             <div className="flex-1 flex flex-col">
                 <Navbar title="لوحة الإدارة" />
@@ -45,10 +102,10 @@ const AdminPanel = () => {
                     {stats && (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                             {[
-                                { label: 'إجمالي المستخدمين', value: stats.total_users,    icon: '👤' },
-                                { label: 'الوصايا النشطة',    value: stats.active_wills,   icon: '📜' },
-                                { label: 'الوصايا المفعّلة',  value: stats.triggered_wills,icon: '🔔' },
-                                { label: 'إجمالي الوثائق',    value: stats.total_documents, icon: '📁' },
+                                { label: 'إجمالي المستخدمين', value: stats.total_users,     icon: '👤' },
+                                { label: 'الوصايا النشطة',    value: stats.active_wills,    icon: '📜' },
+                                { label: 'الوصايا المُفعَّلة', value: stats.triggered_wills, icon: '🔔' },
+                                { label: 'إجمالي الوثائق',    value: stats.total_documents,  icon: '📁' },
                             ].map(s => (
                                 <div key={s.label} className="card text-center">
                                     <p className="text-2xl">{s.icon}</p>
@@ -61,12 +118,14 @@ const AdminPanel = () => {
 
                     {/* Tabs */}
                     <div className="flex gap-2 mb-4 border-b border-gray-200">
-                        {[['users', 'المستخدمون'], ['logs', 'سجلات النظام']].map(([key, label]) => (
+                        {tabs.map(([key, label]) => (
                             <button
                                 key={key}
                                 onClick={() => setTab(key)}
                                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                                    tab === key ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-800'
+                                    tab === key
+                                        ? 'border-indigo-600 text-indigo-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-800'
                                 }`}
                             >
                                 {label}
@@ -74,6 +133,7 @@ const AdminPanel = () => {
                         ))}
                     </div>
 
+                    {/* Users Tab */}
                     {tab === 'users' && (
                         <div className="card overflow-x-auto">
                             <table className="w-full text-sm">
@@ -91,7 +151,7 @@ const AdminPanel = () => {
                                     {users.map(u => (
                                         <tr key={u.id}>
                                             <td className="py-3 font-medium text-gray-800">{u.full_name}</td>
-                                            <td className="py-3 text-gray-600">{u.email}</td>
+                                            <td className="py-3 text-gray-600 text-xs">{u.email}</td>
                                             <td className="py-3">
                                                 <select
                                                     value={u.role}
@@ -109,7 +169,7 @@ const AdminPanel = () => {
                                                 </span>
                                             </td>
                                             <td className="py-3 text-gray-500 text-xs">
-                                                {u.last_checkin ? new Date(u.last_checkin).toLocaleDateString('ar') : '—'}
+                                                {u.last_checkin ? new Date(u.last_checkin).toLocaleString('ar') : '—'}
                                             </td>
                                             <td className="py-3">
                                                 <button
@@ -126,6 +186,7 @@ const AdminPanel = () => {
                         </div>
                     )}
 
+                    {/* Logs Tab */}
                     {tab === 'logs' && (
                         <div className="card overflow-x-auto">
                             <table className="w-full text-sm">
@@ -142,7 +203,11 @@ const AdminPanel = () => {
                                         <tr key={log.id}>
                                             <td className="py-2 text-gray-700">{log.full_name || '—'}</td>
                                             <td className="py-2">
-                                                <span className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">{log.action}</span>
+                                                <span className={`font-mono text-xs px-2 py-0.5 rounded ${
+                                                    log.action === 'WILL_TRIGGERED' ? 'bg-red-100 text-red-700'
+                                                    : log.action === 'CHECKIN'      ? 'bg-green-100 text-green-700'
+                                                    : 'bg-gray-100 text-gray-600'
+                                                }`}>{log.action}</span>
                                             </td>
                                             <td className="py-2 text-gray-500 text-xs">{log.ip_address || '—'}</td>
                                             <td className="py-2 text-gray-400 text-xs">
@@ -153,6 +218,102 @@ const AdminPanel = () => {
                                 </tbody>
                             </table>
                             {logs.length === 0 && <p className="text-center py-8 text-gray-400">لا توجد سجلات</p>}
+                        </div>
+                    )}
+
+                    {/* Test Tab */}
+                    {tab === 'test' && (
+                        <div className="space-y-6">
+                            {/* Mode badge */}
+                            <div className={`card border-2 ${isMinutes ? 'border-purple-300 bg-purple-50' : 'border-gray-200'}`}>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-3xl">{isMinutes ? '🧪' : '🏭'}</span>
+                                    <div>
+                                        <p className="font-bold text-gray-800">
+                                            وضع {isMinutes ? 'التيست (دقائق)' : 'الإنتاج (أيام)'}
+                                        </p>
+                                        <p className="text-sm text-gray-500 mt-0.5">
+                                            {isMinutes
+                                                ? 'كل "يوم" في الإعدادات = دقيقة واحدة فعلياً. الكرون يعمل كل دقيقة.'
+                                                : 'الكرون يعمل كل يوم الساعة 9 صبح. لتفعيل التيست: TIME_UNIT=minutes في .env'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Test message */}
+                            {testMsg && (
+                                <div className={`p-3 rounded-lg text-sm font-medium ${testMsg.startsWith('✅') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+                                    {testMsg}
+                                </div>
+                            )}
+
+                            {/* Force Check */}
+                            <div className="card">
+                                <h3 className="font-bold text-gray-800 mb-2">تشغيل الفحص الآن</h3>
+                                <p className="text-sm text-gray-500 mb-4">
+                                    يشغّل منطق Dead Man's Switch مباشرة الآن — يفحص كل المستخدمين ويُفعِّل الوصايا المنتهية تلقائياً.
+                                </p>
+                                <button
+                                    onClick={forceCheck}
+                                    disabled={testLoading === 'check'}
+                                    className="btn-primary disabled:opacity-60"
+                                >
+                                    {testLoading === 'check' ? '⏳ جاري الفحص...' : '▶️ تشغيل الفحص الآن'}
+                                </button>
+                            </div>
+
+                            {/* Reset Checkin per user */}
+                            <div className="card">
+                                <h3 className="font-bold text-gray-800 mb-2">محاكاة مرور الوقت</h3>
+                                <p className="text-sm text-gray-500 mb-4">
+                                    اضبط آخر تجديد لأي مستخدم ليصبح منذ X {unit} — ثم اضغط "تشغيل الفحص" لترى ماذا يحصل.
+                                </p>
+                                <div className="space-y-3">
+                                    {users.filter(u => u.role === 'user').map(u => (
+                                        <div key={u.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                                            <div className="flex-1">
+                                                <p className="font-medium text-sm text-gray-800">{u.full_name}</p>
+                                                <p className="text-xs text-gray-500">{u.email}</p>
+                                                <p className="text-xs text-gray-400 mt-0.5">
+                                                    آخر تجديد: {u.last_checkin ? new Date(u.last_checkin).toLocaleString('ar') : '—'}
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    max="999"
+                                                    value={agoValues[u.id] || 5}
+                                                    onChange={e => setAgoValues(prev => ({ ...prev, [u.id]: e.target.value }))}
+                                                    className="w-16 text-sm border border-gray-300 rounded px-2 py-1 text-center"
+                                                />
+                                                <span className="text-xs text-gray-500">{unit} مضت</span>
+                                                <button
+                                                    onClick={() => resetCheckin(u.id)}
+                                                    disabled={testLoading === u.id}
+                                                    className="text-sm bg-amber-100 text-amber-800 hover:bg-amber-200 px-3 py-1.5 rounded-md font-medium transition-colors disabled:opacity-60"
+                                                >
+                                                    {testLoading === u.id ? '...' : 'ضبط'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* How to test guide */}
+                            <div className="card bg-blue-50 border border-blue-200">
+                                <h3 className="font-bold text-blue-800 mb-3">خطوات التيست الكاملة</h3>
+                                <ol className="text-sm text-blue-700 space-y-2 list-decimal list-inside">
+                                    <li>أضف وصي (وارث) بإيميل حقيقي في صفحة <strong>الورثة</strong></li>
+                                    <li>اضبط الفترة الزمنية للمستخدم: مثلاً <strong>3 دقائق مضت</strong> (لوصية بـ interval=2 وgrace=1)</li>
+                                    <li>اضغط <strong>"تشغيل الفحص الآن"</strong></li>
+                                    <li>شوف سجل العمليات — المفروض يظهر <code className="bg-red-100 px-1 rounded">WILL_TRIGGERED</code></li>
+                                    <li>الوارث المفروض يستقبل إيميل فيه رابط الوصول</li>
+                                    <li>لإعادة التيست: اضغط <strong>Reset Will</strong> في الداتابيز أو استخدم phpMyAdmin</li>
+                                </ol>
+                            </div>
                         </div>
                     )}
                 </main>

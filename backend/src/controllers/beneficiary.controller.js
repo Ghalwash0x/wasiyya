@@ -1,4 +1,5 @@
 const pool = require('../config/database');
+const { v4: uuidv4 } = require('uuid');
 
 const getBeneficiaries = async (req, res) => {
     try {
@@ -29,10 +30,7 @@ const addBeneficiary = async (req, res) => {
         const { will_id, name, email, phone, relationship } = req.body;
 
         if (!will_id || !name || !email) {
-            return res.status(400).json({
-                success: false,
-                message: 'will_id والاسم والبريد الإلكتروني مطلوبان'
-            });
+            return res.status(400).json({ success: false, message: 'will_id والاسم والبريد الإلكتروني مطلوبان' });
         }
 
         const will = await pool.query(
@@ -43,12 +41,14 @@ const addBeneficiary = async (req, res) => {
             return res.status(404).json({ success: false, message: 'الوصية غير موجودة' });
         }
 
-        const result = await pool.query(
-            `INSERT INTO beneficiaries (will_id, name, email, phone, relationship)
-             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [will_id, name, email, phone || null, relationship || null]
+        const id = uuidv4();
+        await pool.query(
+            `INSERT INTO beneficiaries (id, will_id, name, email, phone, relationship)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [id, will_id, name, email, phone || null, relationship || null]
         );
 
+        const result = await pool.query('SELECT * FROM beneficiaries WHERE id = $1', [id]);
         res.status(201).json({ success: true, data: result.rows[0] });
     } catch (error) {
         res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
@@ -59,14 +59,13 @@ const deleteBeneficiary = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const result = await pool.query(
+        const affected = await pool.query(
             `DELETE FROM beneficiaries
-             WHERE id = $1 AND will_id IN (SELECT id FROM wills WHERE user_id = $2)
-             RETURNING id`,
+             WHERE id = $1 AND will_id IN (SELECT id FROM wills WHERE user_id = $2)`,
             [id, req.user.id]
         );
 
-        if (result.rows.length === 0) {
+        if (affected.affectedRows === 0) {
             return res.status(404).json({ success: false, message: 'الوصي غير موجود' });
         }
 
