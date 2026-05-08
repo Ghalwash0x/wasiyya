@@ -236,7 +236,9 @@ This project follows the complete Software Engineering SDLC:
 
 ## 👨‍💻 Author
 
-**عمر عبدالعال**  
+**Omar Abdelaal Saad** 
+**Mohammed Osama Mohammed** 
+**Mustafa Ali Mustata**
 Software Engineering Final Project — 2026
 
 ---
