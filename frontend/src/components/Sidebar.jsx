@@ -2,18 +2,44 @@ import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-const links = [
-    { to: '/dashboard',      label: 'الرئيسية',     icon: '🏠' },
-    { to: '/will',           label: 'وصيّتي',        icon: '📜' },
-    { to: '/assets',         label: 'الأصول',        icon: '💼' },
-    { to: '/documents',      label: 'الوثائق',       icon: '📁' },
-    { to: '/beneficiaries',  label: 'الوصيّون',      icon: '👥' },
-    { to: '/verification',   label: 'تجديد الوجود',  icon: '✅' },
+const userLinks = [
+    { to: '/dashboard',     label: 'الرئيسية',      icon: '🏠' },
+    { to: '/will',          label: 'وصيّتي',         icon: '📜' },
+    { to: '/assets',        label: 'الأصول',         icon: '💼' },
+    { to: '/documents',     label: 'الوثائق',        icon: '📁' },
+    { to: '/beneficiaries', label: 'الورثة',         icon: '👥' },
+    { to: '/verification',  label: 'تجديد الوجود',   icon: '✅' },
 ];
+
+const adminLinks = [
+    { to: '/admin',         label: 'لوحة التحكم',    icon: '📊', tab: 'home'  },
+    { to: '/admin?tab=users',  label: 'المستخدمون',  icon: '👤', tab: 'users' },
+    { to: '/admin?tab=wills',  label: 'الوصايا',     icon: '📜', tab: 'wills' },
+    { to: '/admin?tab=logs',   label: 'السجلات',     icon: '📋', tab: 'logs'  },
+    { to: '/admin?tab=test',   label: 'أدوات التيست',icon: '🧪', tab: 'test'  },
+];
+
+const NavItem = ({ to, label, icon, end }) => (
+    <NavLink
+        to={to}
+        end={end}
+        className={({ isActive }) =>
+            `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors ${
+                isActive
+                    ? 'bg-white text-indigo-900 font-semibold'
+                    : 'text-indigo-200 hover:bg-indigo-800 hover:text-white'
+            }`
+        }
+    >
+        <span className="text-base">{icon}</span>
+        <span>{label}</span>
+    </NavLink>
+);
 
 const Sidebar = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
+    const isAdmin = user?.role === 'admin';
 
     const handleLogout = async () => {
         await logout();
@@ -21,58 +47,50 @@ const Sidebar = () => {
     };
 
     return (
-        <aside className="w-60 min-h-screen bg-indigo-900 text-white flex flex-col">
+        <aside className="w-60 min-h-screen bg-indigo-900 text-white flex flex-col shrink-0">
+            {/* Brand */}
             <div className="p-5 border-b border-indigo-700">
-                <h1 className="text-2xl font-bold">وصيّة</h1>
-                <p className="text-indigo-300 text-xs mt-1">Digital Will System</p>
+                <h1 className="text-2xl font-bold tracking-wide">وصيّة</h1>
+                <p className="text-indigo-300 text-xs mt-1">
+                    {isAdmin ? 'لوحة الإدارة' : 'Digital Will System'}
+                </p>
             </div>
 
-            <nav className="flex-1 p-3 space-y-1">
-                {links.map(link => (
-                    <NavLink
-                        key={link.to}
-                        to={link.to}
-                        className={({ isActive }) =>
-                            `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors ${
-                                isActive
-                                    ? 'bg-white text-indigo-900 font-semibold'
-                                    : 'text-indigo-200 hover:bg-indigo-800'
-                            }`
-                        }
-                    >
-                        <span>{link.icon}</span>
-                        <span>{link.label}</span>
-                    </NavLink>
-                ))}
-
-                {user?.role === 'admin' && (
-                    <NavLink
-                        to="/admin"
-                        className={({ isActive }) =>
-                            `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors ${
-                                isActive
-                                    ? 'bg-white text-indigo-900 font-semibold'
-                                    : 'text-indigo-200 hover:bg-indigo-800'
-                            }`
-                        }
-                    >
-                        <span>⚙️</span>
-                        <span>لوحة الإدارة</span>
-                    </NavLink>
+            {/* Navigation */}
+            <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+                {isAdmin ? (
+                    <>
+                        <p className="text-indigo-400 text-xs px-4 pt-2 pb-1 uppercase tracking-wider">الإدارة</p>
+                        {adminLinks.map(link => (
+                            <NavItem key={link.tab} to={link.to} label={link.label} icon={link.icon} end={link.tab === 'home'} />
+                        ))}
+                    </>
+                ) : (
+                    <>
+                        <p className="text-indigo-400 text-xs px-4 pt-2 pb-1 uppercase tracking-wider">القائمة</p>
+                        {userLinks.map(link => (
+                            <NavItem key={link.to} to={link.to} label={link.label} icon={link.icon} />
+                        ))}
+                    </>
                 )}
             </nav>
 
+            {/* User info + logout */}
             <div className="p-4 border-t border-indigo-700">
-                <div className="text-xs text-indigo-300 mb-2">
-                    <p className="font-medium text-white truncate">{user?.full_name}</p>
-                    <p className="truncate">{user?.email}</p>
-                    <span className="inline-block mt-1 bg-indigo-700 px-2 py-0.5 rounded text-xs">{user?.role}</span>
+                <div className="mb-3">
+                    <p className="font-semibold text-white text-sm truncate">{user?.full_name}</p>
+                    <p className="text-indigo-300 text-xs truncate mt-0.5">{user?.email}</p>
+                    <span className={`inline-block mt-1.5 px-2 py-0.5 rounded text-xs font-medium
+                        ${isAdmin ? 'bg-amber-500 text-white' : 'bg-indigo-700 text-indigo-200'}`}>
+                        {isAdmin ? 'مدير النظام' : user?.role === 'manager' ? 'مدير' : 'مستخدم'}
+                    </span>
                 </div>
                 <button
                     onClick={handleLogout}
-                    className="w-full text-sm text-indigo-300 hover:text-white transition-colors text-right"
+                    className="w-full text-xs text-indigo-300 hover:text-white transition-colors text-right flex items-center gap-2"
                 >
-                    تسجيل الخروج →
+                    <span>→</span>
+                    <span>تسجيل الخروج</span>
                 </button>
             </div>
         </aside>

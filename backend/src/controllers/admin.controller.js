@@ -194,6 +194,24 @@ const getTriggeredWills = async (req, res) => {
     }
 };
 
+// جلب كل الوصايا في النظام
+const getAllWills = async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT w.*, u.full_name, u.email AS owner_email,
+                (SELECT COUNT(*) FROM assets  WHERE will_id = w.id) AS assets_count,
+                (SELECT COUNT(*) FROM documents WHERE will_id = w.id) AS docs_count,
+                (SELECT COUNT(*) FROM beneficiaries WHERE will_id = w.id) AS ben_count
+            FROM wills w
+            JOIN users u ON w.user_id = u.id
+            ORDER BY w.created_at DESC
+        `);
+        res.json({ success: true, data: result.rows });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
+    }
+};
+
 const getEmailMode = (req, res) => {
     res.json({
         success: true,
@@ -206,5 +224,6 @@ const getEmailMode = (req, res) => {
 
 module.exports = {
     getAllUsers, toggleUserStatus, changeUserRole, getAuditLogs, getStats,
-    forceCheck, resetCheckin, resetWill, getTimeUnit, getTriggeredWills, getEmailMode
+    forceCheck, resetCheckin, resetWill, getTimeUnit, getTriggeredWills, getEmailMode,
+    getAllWills
 };
