@@ -155,7 +155,44 @@ const getTimeUnit = async (req, res) => {
     res.json({ success: true, data: { time_unit: isMinutes ? 'minutes' : 'days' } });
 };
 
+// جلب الوصايا المُفعَّلة مع روابط الوصول لكل وارث
+const getTriggeredWills = async (req, res) => {
+    try {
+        const wills = await pool.query(`
+            SELECT w.id, w.title, w.triggered_at, u.full_name, u.email AS owner_email
+            FROM wills w
+            JOIN users u ON w.user_id = u.id
+            WHERE w.status = 'triggered'
+            ORDER BY w.triggered_at DESC
+        `);
+
+        const result = [];
+        for (const w of wills.rows) {
+            const bens = await pool.query(`
+                SELECT id, name, email, access_token, token_expires, notified_at, accessed_at
+                FROM beneficiaries
+                WHERE will_id = $1
+            `, [w.id]);
+
+            result.push({
+                ...w,
+                beneficiaries: bens.rows.map(b => ({
+                    ...b,
+                    access_url: b.access_token
+                        ? `${process.env.FRONTEND_URL}/access/${b.access_token}`
+                        : null,
+                    token_valid: b.token_expires ? new Date(b.token_expires) > new Date() : false
+                }))
+            });
+        }
+
+        res.json({ success: true, data: result });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
+    }
+};
+
 module.exports = {
     getAllUsers, toggleUserStatus, changeUserRole, getAuditLogs, getStats,
-    forceCheck, resetCheckin, resetWill, getTimeUnit
+    forceCheck, resetCheckin, resetWill, getTimeUnit, getTriggeredWills
 };

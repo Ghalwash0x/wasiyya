@@ -4,15 +4,16 @@ import Navbar from '../components/Navbar';
 import api from '../services/api';
 
 const AdminPanel = () => {
-    const [tab,       setTab]     = useState('users');
-    const [users,     setUsers]   = useState([]);
-    const [logs,      setLogs]    = useState([]);
-    const [stats,     setStats]   = useState(null);
-    const [timeUnit,  setTimeUnit] = useState('days');
-    const [loading,   setLoading] = useState(true);
-    const [testMsg,   setTestMsg] = useState('');
-    const [testLoading, setTestLoading] = useState('');
-    const [agoValues, setAgoValues] = useState({});
+    const [tab,            setTab]           = useState('users');
+    const [users,          setUsers]         = useState([]);
+    const [logs,           setLogs]          = useState([]);
+    const [stats,          setStats]         = useState(null);
+    const [timeUnit,       setTimeUnit]      = useState('days');
+    const [triggeredWills, setTriggeredWills] = useState([]);
+    const [loading,        setLoading]       = useState(true);
+    const [testMsg,        setTestMsg]       = useState('');
+    const [testLoading,    setTestLoading]   = useState('');
+    const [agoValues,      setAgoValues]     = useState({});
 
     const isMinutes = timeUnit === 'minutes';
     const unit = isMinutes ? 'دقيقة' : 'يوم';
@@ -22,12 +23,14 @@ const AdminPanel = () => {
             api.get('/admin/users'),
             api.get('/admin/logs'),
             api.get('/admin/stats'),
-            api.get('/admin/time-unit')
-        ]).then(([u, l, s, t]) => {
+            api.get('/admin/time-unit'),
+            api.get('/admin/triggered-wills')
+        ]).then(([u, l, s, t, tw]) => {
             setUsers(u.data.data);
             setLogs(l.data.data);
             setStats(s.data.data);
             setTimeUnit(t.data.data.time_unit);
+            setTriggeredWills(tw.data.data);
         }).finally(() => setLoading(false));
     }, []);
 
@@ -41,17 +44,24 @@ const AdminPanel = () => {
         setUsers(prev => prev.map(u => u.id === id ? { ...u, role: r.data.data.role } : u));
     };
 
+    const reloadTestData = async () => {
+        const [u, s, tw] = await Promise.all([
+            api.get('/admin/users'),
+            api.get('/admin/stats'),
+            api.get('/admin/triggered-wills')
+        ]);
+        setUsers(u.data.data);
+        setStats(s.data.data);
+        setTriggeredWills(tw.data.data);
+    };
+
     const forceCheck = async () => {
         setTestLoading('check');
         setTestMsg('');
         try {
             const r = await api.post('/admin/force-check');
             setTestMsg(`✅ ${r.data.message}`);
-            // reload users after check
-            const u = await api.get('/admin/users');
-            setUsers(u.data.data);
-            const s = await api.get('/admin/stats');
-            setStats(s.data.data);
+            await reloadTestData();
         } catch (err) {
             setTestMsg(`❌ ${err.response?.data?.message || 'خطأ'}`);
         }
@@ -65,8 +75,19 @@ const AdminPanel = () => {
         try {
             const r = await api.post(`/admin/reset-checkin/${userId}?ago=${ago}`);
             setTestMsg(`✅ ${r.data.message}`);
-            const u = await api.get('/admin/users');
-            setUsers(u.data.data);
+            await reloadTestData();
+        } catch (err) {
+            setTestMsg(`❌ ${err.response?.data?.message || 'خطأ'}`);
+        }
+        setTestLoading('');
+    };
+
+    const resetWill = async (willId) => {
+        setTestLoading('reset-' + willId);
+        try {
+            await api.post(`/admin/reset-will/${willId}`);
+            setTestMsg('✅ تم إعادة تعيين الوصية إلى نشطة');
+            await reloadTestData();
         } catch (err) {
             setTestMsg(`❌ ${err.response?.data?.message || 'خطأ'}`);
         }
@@ -301,6 +322,67 @@ const AdminPanel = () => {
                                     ))}
                                 </div>
                             </div>
+
+                            {/* Triggered wills + access links */}
+                            {triggeredWills.length > 0 && (
+                                <div className="card border border-red-200 bg-red-50">
+                                    <h3 className="font-bold text-red-800 mb-3">🔔 الوصايا المُفعَّلة ({triggeredWills.length})</h3>
+                                    <div className="space-y-4">
+                                        {triggeredWills.map(w => (
+                                            <div key={w.id} className="bg-white rounded-lg p-4 border border-red-100">
+                                                <div className="flex items-start justify-between mb-3">
+                                                    <div>
+                                                        <p className="font-semibold text-gray-800">{w.title}</p>
+                                                        <p className="text-xs text-gray-500">صاحب الوصية: {w.full_name} ({w.owner_email})</p>
+                                                        <p className="text-xs text-gray-400">فُعِّلت: {new Date(w.triggered_at).toLocaleString('ar')}</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => resetWill(w.id)}
+                                                        disabled={testLoading === 'reset-' + w.id}
+                                                        className="text-xs bg-green-100 text-green-700 hover:bg-green-200 px-2 py-1 rounded transition-colors"
+                                                    >
+                                                        {testLoading === 'reset-' + w.id ? '...' : 'إعادة تعيين'}
+                                                    </button>
+                                                </div>
+                                                {w.beneficiaries.length === 0 ? (
+                                                    <p className="text-xs text-gray-400 italic">لا يوجد ورثة مضافون</p>
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        <p className="text-xs font-medium text-gray-600 mb-1">روابط الوصول للورثة:</p>
+                                                        {w.beneficiaries.map(b => (
+                                                            <div key={b.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-sm font-medium text-gray-800">{b.name}</p>
+                                                                    <p className="text-xs text-gray-500">{b.email}</p>
+                                                                </div>
+                                                                {b.access_url ? (
+                                                                    <div className="flex items-center gap-2 shrink-0">
+                                                                        {b.token_valid ? (
+                                                                            <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">صالح</span>
+                                                                        ) : (
+                                                                            <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">منتهي</span>
+                                                                        )}
+                                                                        <a
+                                                                            href={b.access_url}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="text-xs bg-indigo-600 text-white hover:bg-indigo-700 px-3 py-1.5 rounded font-medium transition-colors"
+                                                                        >
+                                                                            افتح الوصية
+                                                                        </a>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-xs text-gray-400">لم يُبلَّغ بعد</span>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* How to test guide */}
                             <div className="card bg-blue-50 border border-blue-200">

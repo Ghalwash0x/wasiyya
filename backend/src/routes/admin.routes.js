@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const {
     getAllUsers, toggleUserStatus, changeUserRole, getAuditLogs, getStats,
-    forceCheck, resetCheckin, resetWill, getTimeUnit
+    forceCheck, resetCheckin, resetWill, getTimeUnit, getTriggeredWills
 } = require('../controllers/admin.controller');
 const { authenticate } = require('../middleware/auth.middleware');
 const { authorize }    = require('../middleware/rbac.middleware');
@@ -19,6 +19,7 @@ router.get('/stats',  getStats);
 
 // Testing / Dev tools
 router.get('/time-unit',               getTimeUnit);
+router.get('/triggered-wills',         getTriggeredWills);
 router.post('/force-check',            forceCheck);
 router.post('/reset-checkin/:id',      resetCheckin);
 router.post('/reset-will/:id',         resetWill);
