@@ -9,6 +9,7 @@ const userLinks = [
     { to: '/documents',     label: 'الوثائق',        icon: '📁' },
     { to: '/beneficiaries', label: 'الورثة',         icon: '👥' },
     { to: '/verification',  label: 'تجديد الوجود',   icon: '✅' },
+    { to: '/email-test',    label: 'اختبار البريد',   icon: '📧' },
 ];
 
 const adminLinks = [
@@ -17,6 +18,7 @@ const adminLinks = [
     { to: '/admin?tab=wills',  label: 'الوصايا',     icon: '📜', tab: 'wills' },
     { to: '/admin?tab=logs',   label: 'السجلات',     icon: '📋', tab: 'logs'  },
     { to: '/admin?tab=test',   label: 'أدوات التيست',icon: '🧪', tab: 'test'  },
+    { to: '/email-test',    label: 'اختبار البريد',   icon: '📧', tab: null },
 ];
 
 const NavItem = ({ to, label, icon, end }) => (
@@ -62,7 +64,7 @@ const Sidebar = () => {
                     <>
                         <p className="text-indigo-400 text-xs px-4 pt-2 pb-1 uppercase tracking-wider">الإدارة</p>
                         {adminLinks.map(link => (
-                            <NavItem key={link.tab} to={link.to} label={link.label} icon={link.icon} end={link.tab === 'home'} />
+                            <NavItem key={link.to} to={link.to} label={link.label} icon={link.icon} end={link.tab === 'home'} />
                         ))}
                     </>
                 ) : (
