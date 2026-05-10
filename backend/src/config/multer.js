@@ -1,5 +1,6 @@
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
 const ALLOWED_TYPES = [
@@ -16,7 +17,16 @@ const MAX_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024;
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, process.env.UPLOAD_PATH || './uploads');
+        const dir = process.env.UPLOAD_PATH || './uploads';
+        const resolved = path.isAbsolute(dir)
+            ? dir
+            : path.join(process.cwd(), dir);
+        try {
+            fs.mkdirSync(resolved, { recursive: true });
+        } catch (err) {
+            return cb(err);
+        }
+        cb(null, resolved);
     },
     filename: (req, file, cb) => {
         const ext = path.extname(file.originalname);

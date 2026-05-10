@@ -56,6 +56,9 @@ app.use((err, req, res, next) => {
     if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(413).json({ success: false, message: 'حجم الملف أكبر من المسموح' });
     }
+    if (err.name === 'MulterError' || (typeof err.message === 'string' && err.message.includes('نوع الملف'))) {
+        return res.status(400).json({ success: false, message: err.message || 'خطأ في الملف المرفوع' });
+    }
     res.status(500).json({ success: false, message: 'خطأ داخلي في السيرفر' });
 });
 

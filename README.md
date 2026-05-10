@@ -287,7 +287,7 @@ wasiyya/
 │   │   │
 │   │   └── app.js                   # Express app entry — middleware, routes, HTTPS
 │   │
-│   ├── uploads/                     # Uploaded user files (gitignored)
+│   ├── uploads/                     # User uploads (.gitkeep only; files gitignored)
 │   ├── certs/                       # SSL certificates (optional)
 │   ├── .env                         # Local environment (gitignored)
 │   ├── .env.example                 # Template for environment variables

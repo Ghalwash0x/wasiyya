@@ -9,7 +9,6 @@ const userLinks = [
     { to: '/documents',     label: 'الوثائق',        icon: '📁' },
     { to: '/beneficiaries', label: 'الورثة',         icon: '👥' },
     { to: '/verification',  label: 'تجديد الوجود',   icon: '✅' },
-    { to: '/email-test',    label: 'اختبار البريد',   icon: '📧' },
 ];
 
 const adminLinks = [
@@ -18,7 +17,6 @@ const adminLinks = [
     { to: '/admin?tab=wills',  label: 'الوصايا',     icon: '📜', tab: 'wills' },
     { to: '/admin?tab=logs',   label: 'السجلات',     icon: '📋', tab: 'logs'  },
     { to: '/admin?tab=test',   label: 'أدوات التيست',icon: '🧪', tab: 'test'  },
-    { to: '/email-test',    label: 'اختبار البريد',   icon: '📧', tab: null },
 ];
 
 const NavItem = ({ to, label, icon, end }) => (

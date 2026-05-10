@@ -123,38 +123,4 @@ const logout = async (req, res) => {
     res.json({ success: true, message: 'تم تسجيل الخروج بنجاح' });
 };
 
-const emailService = require('../services/email.service');
-
-const testEmail = async (req, res) => {
-    try {
-        const me = await pool.query(
-            'SELECT full_name, email FROM users WHERE id = $1',
-            [req.user.id]
-        );
-        if (me.rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
-        }
-        const { full_name, email } = me.rows[0];
-        const result = await emailService.sendTestEmail(email, full_name);
-        if (result.error) {
-            return res.status(502).json({
-                success: false,
-                message: `فشل الإرسال: ${result.error}`
-            });
-        }
-        await pool.query(
-            'INSERT INTO audit_logs (id, user_id, action, ip_address) VALUES ($1, $2, $3, $4)',
-            [uuidv4(), req.user.id, 'EMAIL_TEST', req.ip]
-        );
-        res.json({
-            success: true,
-            message: 'تم إرسال رسالة الاختبار — راجع صندوق الوارد (والسبام).',
-            data: { to: email, previewUrl: result.previewUrl || null }
-        });
-    } catch (error) {
-        console.error('testEmail error:', error);
-        res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
-    }
-};
-
-module.exports = { register, login, getMe, logout, testEmail };
+module.exports = { register, login, getMe, logout };

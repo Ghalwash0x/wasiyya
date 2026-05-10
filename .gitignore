@@ -32,3 +32,5 @@ Thumbs.db
 
 # Temp
 *.tmp
+_git_terminal_out.txt
+_git_quick_status.txt

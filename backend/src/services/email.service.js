@@ -137,28 +137,6 @@ const sendBeneficiaryNotification = async (email, name, token, beneficiaryId) =>
 const getPreview    = (beneficiaryId) => previews.get(String(beneficiaryId)) || null;
 const getAllPreviews = () => Object.fromEntries(previews);
 
-/** إرسال رسالة تجريبية للتحقق من SMTP (يُستدعى من حساب المستخدم لنفس بريده فقط) */
-const sendTestEmail = async (to, displayName = '') => {
-    const name = displayName ? `<p style="margin:0 0 12px;">مرحباً <strong>${displayName}</strong>،</p>` : '';
-    return sendMail({
-        from:    process.env.EMAIL_FROM || 'wasiyya <noreply@wasiyya.com>',
-        to,
-        subject: 'وصيّة — اختبار إعدادات البريد',
-        html: `
-            <div dir="rtl" style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px;
-                border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;">
-                <h2 style="color:#4f46e5;margin:0 0 16px;">✅ تم استلام رسالة الاختبار</h2>
-                ${name}
-                <p style="margin:0;color:#374151;line-height:1.6;">
-                    إذا وصلتك هذه الرسالة، فإعدادات البريد في الخادم تعمل بشكل صحيح.
-                </p>
-                <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;">
-                    Wasiyya — Digital Will System · ${new Date().toISOString()}
-                </p>
-            </div>`
-    });
-};
-
 module.exports = {
     sendWarningEmail,
     sendFinalWarningEmail,
@@ -166,5 +144,4 @@ module.exports = {
     getPreview,
     getAllPreviews,
     isGmailConfigured,
-    sendTestEmail
 };

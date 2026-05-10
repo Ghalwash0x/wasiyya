@@ -34,9 +34,7 @@ const Documents = () => {
 
         setUploading(true);
         try {
-            const r = await api.post('/documents/upload', fd, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
+            const r = await api.post('/documents/upload', fd);
             setDocuments(prev => [r.data.data, ...prev]);
         } catch (err) {
             alert(err.response?.data?.message || 'فشل رفع الملف');
