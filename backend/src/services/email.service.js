@@ -3,19 +3,28 @@ const nodemailer = require('nodemailer');
 // In-memory store: beneficiaryId → Ethereal preview URL
 const previews = new Map();
 
-const isGmailConfigured = () =>
-    process.env.EMAIL_USER &&
-    process.env.EMAIL_USER !== 'your@gmail.com' &&
-    process.env.EMAIL_PASS &&
-    process.env.EMAIL_PASS !== 'your_app_password';
+// Returns true only when real SMTP credentials are configured
+const isEmailConfigured = () => {
+    const user = process.env.EMAIL_USER || '';
+    const pass = process.env.EMAIL_PASS || '';
+    return (
+        user.includes('@') &&
+        !user.includes('your_') &&
+        pass.length > 0 &&
+        !pass.includes('your_')
+    );
+};
+
+// Keep old name as alias for admin panel compatibility
+const isGmailConfigured = isEmailConfigured;
 
 let etherealTransporter = null;
 
 const getTransporter = async () => {
-    if (isGmailConfigured()) {
+    if (isEmailConfigured()) {
         return nodemailer.createTransport({
-            host:   'smtp.gmail.com',
-            port:   587,
+            host:   process.env.EMAIL_HOST || 'smtp.gmail.com',
+            port:   parseInt(process.env.EMAIL_PORT) || 587,
             secure: false,
             auth: {
                 user: process.env.EMAIL_USER,
