@@ -1,4 +1,5 @@
 const cron   = require('node-cron');
+const crypto = require('crypto');
 const pool   = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
 const emailService   = require('./email.service');
@@ -23,7 +24,7 @@ const triggerWill = async (willId, userId) => {
     );
 
     for (const ben of beneficiaries.rows) {
-        const token   = require('crypto').randomBytes(32).toString('hex');
+        const token   = crypto.randomBytes(32).toString('hex');
         const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
         await pool.query(

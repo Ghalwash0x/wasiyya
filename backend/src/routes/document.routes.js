@@ -7,9 +7,10 @@ const {
     verifyDocument
 } = require('../controllers/document.controller');
 const { authenticate } = require('../middleware/auth.middleware');
+const { authorize }    = require('../middleware/rbac.middleware');
 const upload = require('../config/multer');
 
-router.use(authenticate);
+router.use(authenticate, authorize('user', 'manager'));
 
 router.post('/upload', upload.single('file'), uploadDocument);
 router.get('/download/:id', downloadDocument);

@@ -1,8 +1,9 @@
 const router = require('express').Router();
 const { getMyWill, createWill, updateWill, deleteWill } = require('../controllers/will.controller');
 const { authenticate } = require('../middleware/auth.middleware');
+const { authorize }    = require('../middleware/rbac.middleware');
 
-router.use(authenticate);
+router.use(authenticate, authorize('user', 'manager'));
 
 router.get('/', getMyWill);
 router.post('/', createWill);

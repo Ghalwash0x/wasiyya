@@ -14,8 +14,8 @@ const Login = () => {
         setError('');
         setLoading(true);
         try {
-            await login(form.email, form.password);
-            navigate('/dashboard');
+            const loggedUser = await login(form.email, form.password);
+            navigate(loggedUser.role === 'admin' ? '/admin' : '/dashboard');
         } catch (err) {
             setError(err.response?.data?.message || 'حدث خطأ، حاول مجدداً');
         }
