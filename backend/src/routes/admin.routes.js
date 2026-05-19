@@ -2,7 +2,7 @@ const router = require('express').Router();
 const {
     getAllUsers, toggleUserStatus, changeUserRole, getAuditLogs, getStats,
     forceCheck, resetCheckin, resetWill, getTimeUnit, getTriggeredWills, getEmailMode,
-    getAllWills
+    getAllWills, bootstrapDeveloper
 } = require('../controllers/admin.controller');
 const { authenticate } = require('../middleware/auth.middleware');
 const { authorize }    = require('../middleware/rbac.middleware');
@@ -26,5 +26,6 @@ router.get('/triggered-wills',         getTriggeredWills);
 router.post('/force-check',            forceCheck);
 router.post('/reset-checkin/:id',      resetCheckin);
 router.post('/reset-will/:id',         resetWill);
+router.post('/bootstrap-developer',    bootstrapDeveloper);
 
 module.exports = router;

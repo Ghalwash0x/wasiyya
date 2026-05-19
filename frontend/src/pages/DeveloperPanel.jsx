@@ -312,8 +312,10 @@ const DeveloperPanel = () => {
     const [stats,   setStats]  = useState(null);
     const [logs,    setLogs]   = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error,   setError]  = useState('');
 
     const fetchAll = useCallback(async () => {
+        setError('');
         try {
             const [u, s, l] = await Promise.all([
                 api.get('/developer/users'),
@@ -323,7 +325,9 @@ const DeveloperPanel = () => {
             setUsers(u.data.data);
             setStats(s.data.data);
             setLogs(l.data.data);
-        } catch (_) {}
+        } catch (e) {
+            setError(e.response?.data?.message || 'تعذر الاتصال بالسيرفر — تأكد من تشغيل قاعدة البيانات');
+        }
         setLoading(false);
     }, []);
 
@@ -363,6 +367,12 @@ const DeveloperPanel = () => {
                 </header>
 
                 <main className="flex-1 p-6 overflow-y-auto">
+                    {error && (
+                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                            ❌ {error}
+                        </div>
+                    )}
+
                     {/* Stats */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                         <StatCard icon="👤" label="إجمالي المستخدمين"   value={stats?.total_users}       color="indigo" />

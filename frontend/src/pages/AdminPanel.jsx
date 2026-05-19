@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 /* ───────── helpers ───────── */
 const statusBadge = (s) => ({
@@ -423,7 +424,9 @@ const TestTab = ({ users, timeUnit, emailMode, triggeredWills, onRefresh }) => {
    MAIN COMPONENT
 ══════════════════════════════════════ */
 const AdminPanel = () => {
-    const location = useLocation();
+    const location  = useLocation();
+    const navigate  = useNavigate();
+    const { logout } = useAuth();
     const qTab = new URLSearchParams(location.search).get('tab') || 'home';
 
     const [tab,            setTab]           = useState(qTab);
@@ -435,6 +438,7 @@ const AdminPanel = () => {
     const [emailMode,      setEmailMode]     = useState('ethereal');
     const [triggeredWills, setTriggeredWills] = useState([]);
     const [loading,        setLoading]       = useState(true);
+    const [bootstrapping,  setBootstrapping] = useState(false);
 
     useEffect(() => { setTab(qTab); }, [qTab]);
 
@@ -494,6 +498,26 @@ const AdminPanel = () => {
                     </div>
                     <div className="flex items-center gap-3 text-sm text-gray-500">
                         <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-medium">النظام يعمل</span>
+                        {/* Bootstrap: only shown when first developer account needs to be created */}
+                        <button
+                            onClick={async () => {
+                                if (!window.confirm('ترقية حسابك إلى Developer؟\nستحتاج لإعادة تسجيل الدخول بعدها.')) return;
+                                setBootstrapping(true);
+                                try {
+                                    await api.post('/admin/bootstrap-developer');
+                                    await logout();
+                                    window.location.href = '/login';
+                                } catch (e) {
+                                    alert(e.response?.data?.message || 'خطأ');
+                                    setBootstrapping(false);
+                                }
+                            }}
+                            disabled={bootstrapping}
+                            title="ترقية إلى Developer (يعمل فقط إذا لم يكن هناك حساب developer)"
+                            className="text-xs px-2 py-1 rounded bg-purple-50 text-purple-600 hover:bg-purple-100 border border-purple-200 font-medium disabled:opacity-60"
+                        >
+                            {bootstrapping ? '...' : '⚙️ Dev Mode'}
+                        </button>
                     </div>
                 </header>
 

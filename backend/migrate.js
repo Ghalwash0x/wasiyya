@@ -14,6 +14,9 @@ async function migrate() {
         database: process.env.DB_NAME     || 'wasiyya',
     });
 
+    const { v4: uuidv4 } = require('uuid');
+    const bcrypt = require('bcrypt');
+
     const steps = [
         {
             sql: `ALTER TABLE users MODIFY COLUMN role ENUM('admin','user','manager','developer') DEFAULT 'user'`,
@@ -44,6 +47,19 @@ async function migrate() {
                 console.error(`❌ ${step.desc}: ${e.message}`);
             }
         }
+    }
+
+    // Seed developer account if none exists
+    const [devRows] = await conn.execute(`SELECT COUNT(*) AS cnt FROM users WHERE role = 'developer'`);
+    if (parseInt(devRows[0].cnt) === 0) {
+        const hashed = await bcrypt.hash('Dev@Secret#99', 12);
+        await conn.execute(
+            `INSERT INTO users (id, full_name, email, password, role) VALUES (?, ?, ?, ?, 'developer')`,
+            [uuidv4(), 'Developer', 'dev@wasiyya.internal', hashed]
+        );
+        console.log('✅ Developer seed account created: dev@wasiyya.internal / Dev@Secret#99');
+    } else {
+        console.log('⏭️  Developer account already exists — skipping seed');
     }
 
     console.log('\n✅ Migration complete — restart the backend server');

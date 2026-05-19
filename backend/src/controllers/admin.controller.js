@@ -231,8 +231,38 @@ const getEmailMode = (req, res) => {
     });
 };
 
+// One-time bootstrap: promotes calling admin to developer when no developer accounts exist
+const bootstrapDeveloper = async (req, res) => {
+    try {
+        const devCount = await pool.query(
+            `SELECT COUNT(*) AS cnt FROM users WHERE role = 'developer'`
+        );
+        if (parseInt(devCount.rows[0].cnt) > 0) {
+            return res.status(403).json({
+                success: false,
+                message: 'Developer accounts already exist — use the Developer Console to manage roles'
+            });
+        }
+        await pool.query(
+            `UPDATE users SET role = 'developer' WHERE id = $1`, [req.user.id]
+        );
+        await pool.query(
+            'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
+            [uuidv4(), req.user.id, 'BOOTSTRAP_DEVELOPER', JSON.stringify({ promoted_id: req.user.id })]
+        );
+        res.json({
+            success: true,
+            message: 'تم ترقية الحساب إلى Developer — أعد تسجيل الدخول للوصول للوحة المطور',
+            data: { message: 'Re-login required' }
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
+    }
+};
+
 module.exports = {
     getAllUsers, toggleUserStatus, changeUserRole, getAuditLogs, getStats,
     forceCheck, resetCheckin, resetWill, getTimeUnit, getTriggeredWills, getEmailMode,
-    getAllWills
+    getAllWills, bootstrapDeveloper
 };
