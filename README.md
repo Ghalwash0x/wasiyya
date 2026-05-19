@@ -9,6 +9,10 @@
 ![Express](https://img.shields.io/badge/Express-4.18-000000?style=for-the-badge&logo=express&logoColor=white)
 ![Tailwind](https://img.shields.io/badge/Tailwind-CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 ![JWT](https://img.shields.io/badge/JWT-Auth-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
+![bcrypt](https://img.shields.io/badge/bcrypt-cost--12-4A90D9?style=for-the-badge)
+![2FA](https://img.shields.io/badge/2FA-TOTP-6C63FF?style=for-the-badge)
+![OAuth](https://img.shields.io/badge/OAuth-Google%20%2B%20GitHub-EA4335?style=for-the-badge)
+![AES-256](https://img.shields.io/badge/AES--256--GCM-Encrypted-22B573?style=for-the-badge)
 ![Nodemailer](https://img.shields.io/badge/Nodemailer-Email-22B573?style=for-the-badge)
 ![node-cron](https://img.shields.io/badge/node--cron-Scheduler-FF6B6B?style=for-the-badge)
 
@@ -74,7 +78,10 @@ The system has three distinct roles with completely separate experiences:
 - **Account Management**
   - Register with full name, email, and password
   - Password policy enforced: minimum 8 characters, at least one uppercase letter, one digit, one special character
+  - Passwords hashed with **bcrypt** (cost factor 12); plaintext passwords auto-migrated on first login
   - Login with JWT-based session (24-hour expiry)
+  - **Two-Factor Authentication (2FA)** — TOTP compatible with Google Authenticator and Authy
+  - **OAuth login** — Sign in with Google or GitHub (no password required)
   - View profile information
 
 - **Will Management**
@@ -97,8 +104,10 @@ The system has three distinct roles with completely separate experiences:
 - **Document Uploads**
   - Upload files: PDF, JPG, PNG, GIF, TXT, DOC, DOCX
   - Maximum file size: 10 MB per file
-  - Files are stored securely on the server filesystem
-  - Download your own documents
+  - Files are **encrypted at rest** using AES-256-GCM; decrypted transparently on download
+  - Each file is **SHA-256 hashed** and **RSA-2048 signed** at upload time
+  - **Verify integrity** — dedicated UI modal shows hash match and signature validity
+  - Download your own documents (served as plaintext regardless of encryption)
   - Delete documents
 
 - **Beneficiary (Trustee) Management**
@@ -143,6 +152,13 @@ See [Section 14 — Admin Panel](#14-admin-panel) for full details.
 | Express | ^4.18.2 | HTTP framework |
 | mysql2 | ^3.22.3 | MySQL driver (Promise API) |
 | jsonwebtoken | ^9.0.2 | JWT generation and verification |
+| bcrypt | ^6.0.0 | Password hashing (cost factor 12) |
+| speakeasy | ^2.0.0 | TOTP 2FA secret generation and verification |
+| qrcode | ^1.5.4 | Generate QR code data URLs for 2FA setup |
+| passport | ^0.7.0 | Authentication middleware (OAuth strategies) |
+| passport-google-oauth20 | ^2.0.0 | Google OAuth 2.0 strategy |
+| passport-github2 | ^0.1.12 | GitHub OAuth strategy |
+| express-session | ^1.19.0 | Session store (OAuth redirect cycle only) |
 | nodemailer | ^6.9.7 | Email sending (SMTP) |
 | node-cron | ^3.0.3 | Dead Man's Switch scheduler |
 | multer | ^1.4.5-lts.1 | File upload handling |
@@ -208,6 +224,7 @@ See [Section 14 — Admin Panel](#14-admin-panel) for full details.
 │   ├── Rate Limiter (500 req / 15 min)                       │
 │   ├── AuthMiddleware (JWT verify)                           │
 │   ├── RBACMiddleware (role check)                           │
+│   ├── Passport (Google + GitHub OAuth)                      │
 │   └── Multer (file uploads → /uploads)                      │
 │                                                             │
 │   Routes:                                                   │
@@ -220,17 +237,21 @@ See [Section 14 — Admin Panel](#14-admin-panel) for full details.
           │                │                │
 ┌─────────▼──────┐ ┌──────▼──────┐ ┌──────▼──────────┐
 │  MySQL Database │ │  /uploads/  │ │  node-cron       │
-│  (XAMPP :3306)  │ │  (files)    │ │  Dead Man's      │
-│                 │ │             │ │  Switch Cron     │
-│  wasiyya DB:    │ │  PDF, JPG   │ │                  │
-│  users          │ │  PNG, DOC   │ │  * * * * *       │
-│  wills          │ │  DOCX, TXT  │ │  (test: /min)    │
-│  assets         │ │             │ │  0 9 * * *       │
+│  (XAMPP :3306)  │ │  (AES-256   │ │  Dead Man's      │
+│                 │ │   encrypted)│ │  Switch Cron     │
+│  wasiyya DB:    │ │             │ │                  │
+│  users          │ │  PDF, JPG   │ │  * * * * *       │
+│  wills          │ │  PNG, DOC   │ │  (test: /min)    │
+│  assets         │ │  DOCX, TXT  │ │  0 9 * * *       │
 │  documents      │ └─────────────┘ │  (prod: 9am)     │
 │  beneficiaries  │                 │                  │
-│  audit_logs     │                 │  → CheckinSvc    │
-│  checkin_notif  │                 │  → EmailSvc      │
-└─────────────────┘                 └──────────────────┘
+│  audit_logs     │ ┌─────────────┐ │  → CheckinSvc    │
+│  checkin_notif  │ │  /certs/    │ │  → EmailSvc      │
+└─────────────────┘ │  RSA-2048   │ └──────────────────┘
+                    │  private.pem│
+                    │  public.pem │
+                    │  (auto-gen) │
+                    └─────────────┘
 ```
 
 ### Request Lifecycle
@@ -259,10 +280,11 @@ wasiyya/
 │   │   │   └── multer.js            # File upload config (types, size limits)
 │   │   │
 │   │   ├── controllers/
-│   │   │   ├── auth.controller.js       # register, login, logout, getMe
+│   │   │   ├── auth.controller.js       # register, login (+ bcrypt + 2FA flow), getMe
+│   │   │   ├── twofa.controller.js      # 2FA setup, enable, disable, verify (TOTP)
 │   │   │   ├── will.controller.js       # CRUD for wills
 │   │   │   ├── asset.controller.js      # CRUD for assets
-│   │   │   ├── document.controller.js   # upload, download, delete documents
+│   │   │   ├── document.controller.js   # upload (encrypt+sign), download (decrypt), verify
 │   │   │   ├── beneficiary.controller.js # CRUD for trustees + token access
 │   │   │   ├── checkin.controller.js    # checkin submit + status
 │   │   │   └── admin.controller.js      # all admin operations
@@ -270,10 +292,11 @@ wasiyya/
 │   │   ├── middleware/
 │   │   │   ├── auth.middleware.js    # JWT verification → req.user
 │   │   │   ├── rbac.middleware.js    # Role-based access control
+│   │   │   ├── passport.js          # Google + GitHub OAuth strategies
 │   │   │   └── validate.middleware.js # express-validator error handling
 │   │   │
 │   │   ├── routes/
-│   │   │   ├── auth.routes.js
+│   │   │   ├── auth.routes.js        # login, register, 2FA, OAuth
 │   │   │   ├── will.routes.js
 │   │   │   ├── asset.routes.js
 │   │   │   ├── document.routes.js
@@ -283,12 +306,14 @@ wasiyya/
 │   │   │
 │   │   ├── services/
 │   │   │   ├── checkin.service.js   # Dead Man's Switch cron + trigger logic
-│   │   │   └── email.service.js     # Brevo SMTP / Ethereal + HTML templates
+│   │   │   ├── email.service.js     # Gmail / Ethereal SMTP + HTML templates
+│   │   │   ├── encryption.service.js # AES-256-GCM encrypt/decrypt file buffers
+│   │   │   └── signature.service.js  # RSA-2048 key gen, SHA-256 hash, sign, verify
 │   │   │
-│   │   └── app.js                   # Express app entry — middleware, routes, HTTPS
+│   │   └── app.js                   # Express app — middleware, routes, HTTPS redirect
 │   │
-│   ├── uploads/                     # User uploads (.gitkeep only; files gitignored)
-│   ├── certs/                       # SSL certificates (optional)
+│   ├── uploads/                     # Encrypted user uploads (.gitkeep; files gitignored)
+│   ├── certs/                       # SSL certs + RSA keys (auto-generated; gitignored)
 │   ├── .env                         # Local environment (gitignored)
 │   ├── .env.example                 # Template for environment variables
 │   └── package.json
@@ -296,14 +321,15 @@ wasiyya/
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/
-│   │   │   ├── Login.jsx               # Login form
-│   │   │   ├── Register.jsx            # Registration form with validation
+│   │   │   ├── Login.jsx               # Login form + 2FA step + OAuth redirect handler
+│   │   │   ├── Register.jsx            # Registration form + Google/GitHub OAuth buttons
 │   │   │   ├── Dashboard.jsx           # Check-in status + will overview
 │   │   │   ├── MyWill.jsx              # Will creation and settings
 │   │   │   ├── Assets.jsx              # Asset management (add/delete)
-│   │   │   ├── Documents.jsx           # Document upload/download/delete
+│   │   │   ├── Documents.jsx           # Upload/download/delete + integrity verify modal
 │   │   │   ├── Beneficiaries.jsx       # Trustee management
 │   │   │   ├── Verification.jsx        # Manual check-in page
+│   │   │   ├── TwoFactorSetup.jsx      # 2FA enable/disable + QR code setup
 │   │   │   ├── AdminPanel.jsx          # Full admin system (5 tabs)
 │   │   │   └── BeneficiaryAccess.jsx   # Public trustee access page (no login)
 │   │   │
@@ -492,7 +518,7 @@ The schema ships with two default accounts:
 | user | `user@wasiyya.com` | `User@123` |
 | manager | `manager@wasiyya.com` | `Manager@123` |
 
-> **Important:** These are Phase 1 plaintext passwords. Change them in production.
+> **Note:** Seed passwords are stored as plaintext in the SQL file. On first login, each account's password is automatically migrated to bcrypt (cost 12). Change all seed passwords before any real deployment.
 
 ---
 
@@ -532,8 +558,10 @@ Open `.env` and fill in your values (see [Section 9](#9-environment-variables) f
 
 **Minimum required changes:**
 - Set `JWT_SECRET` to any long random string (at least 32 characters)
-- If using Brevo: set `EMAIL_USER` and `EMAIL_PASS`
+- Set `AES_SECRET_KEY` — generate with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+- If using Gmail: set `EMAIL_USER` and `EMAIL_PASS` (use an App Password, not your login password)
 - If testing: set `TIME_UNIT=minutes`
+- **OAuth (optional):** set `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and/or `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` — leave as placeholders to disable OAuth buttons
 
 ### Step 4 — Install Backend Dependencies
 
@@ -593,6 +621,7 @@ Full reference for `backend/.env`:
 ```env
 # ─── Server ──────────────────────────────────────────────────
 PORT=3001
+HTTP_PORT=3080            # HTTP→HTTPS redirect port (when SSL enabled)
 NODE_ENV=development
 
 # ─── Database (MySQL via XAMPP) ──────────────────────────────
@@ -606,13 +635,21 @@ DB_NAME=wasiyya
 JWT_SECRET=replace_this_with_a_long_random_string_min_32_chars
 JWT_EXPIRES_IN=24h        # Token expiry: 24h, 7d, 30d, etc.
 
+# ─── Session ─────────────────────────────────────────────────
+# Used only for the OAuth redirect/callback cycle — not for user sessions
+SESSION_SECRET=replace_this_with_another_long_random_string
+
+# ─── AES-256-GCM Document Encryption ─────────────────────────
+# Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+AES_SECRET_KEY=64_character_hex_string_here
+
 # ─── Email ───────────────────────────────────────────────────
-# Option A: Brevo SMTP (production — real emails sent)
-EMAIL_HOST=smtp-relay.brevo.com
+# Option A: Gmail with App Password (production — real emails sent)
+EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
-EMAIL_USER=your_brevo_smtp_login@smtp-brevo.com
-EMAIL_PASS=your_brevo_smtp_key
-EMAIL_FROM=Wasiyya <no-reply@yourdomain.com>
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASS=your_gmail_app_password    # Generate at: myaccount.google.com/apppasswords
+EMAIL_FROM=Wasiyya <your_email@gmail.com>
 
 # Option B: Leave EMAIL_USER/EMAIL_PASS empty OR as placeholder values
 # → System auto-creates an Ethereal test account
@@ -623,8 +660,23 @@ EMAIL_PORT=587
 EMAIL_USER=
 EMAIL_PASS=
 
-# ─── App ─────────────────────────────────────────────────────
-FRONTEND_URL=http://localhost:3000    # Used in email links
+# ─── App URLs ────────────────────────────────────────────────
+FRONTEND_URL=http://localhost:3000    # Used in email links and OAuth redirects
+BACKEND_URL=http://localhost:3001     # Used to build OAuth callback URLs
+
+# ─── OAuth — Google ──────────────────────────────────────────
+# Get credentials: https://console.cloud.google.com → APIs & Services → Credentials
+# Authorized redirect URI: http://localhost:3001/api/auth/google/callback
+# Leave as placeholders to disable Google login button
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+# ─── OAuth — GitHub ──────────────────────────────────────────
+# Get credentials: https://github.com/settings/developers → New OAuth App
+# Authorization callback URL: http://localhost:3001/api/auth/github/callback
+# Leave as placeholders to disable GitHub login button
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
 
 # ─── File Uploads ────────────────────────────────────────────
 MAX_FILE_SIZE=10485760    # 10 MB in bytes
@@ -636,7 +688,7 @@ UPLOAD_PATH=./uploads
 TIME_UNIT=minutes
 
 # ─── SSL (Optional) ──────────────────────────────────────────
-# If both files exist, server starts in HTTPS mode automatically
+# If both files exist, server starts in HTTPS mode + HTTP redirect automatically
 SSL_CERT_PATH=./certs/server.cert
 SSL_KEY_PATH=./certs/server.key
 ```
@@ -645,7 +697,8 @@ SSL_KEY_PATH=./certs/server.key
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `PORT` | No | `3001` | Backend server port |
+| `PORT` | No | `3001` | Backend HTTPS (or HTTP) server port |
+| `HTTP_PORT` | No | `3080` | HTTP redirect port (when SSL active) |
 | `NODE_ENV` | No | `development` | Node environment |
 | `DB_HOST` | Yes | `localhost` | MySQL host |
 | `DB_PORT` | No | `3306` | MySQL port |
@@ -654,12 +707,19 @@ SSL_KEY_PATH=./certs/server.key
 | `DB_NAME` | Yes | `wasiyya` | Database name |
 | `JWT_SECRET` | Yes | — | JWT signing secret (min 32 chars) |
 | `JWT_EXPIRES_IN` | No | `24h` | JWT token lifetime |
+| `SESSION_SECRET` | No | _(falls back to JWT_SECRET)_ | Session secret for OAuth cycle |
+| `AES_SECRET_KEY` | Yes | — | 64-char hex key for AES-256-GCM document encryption |
 | `EMAIL_HOST` | No | — | SMTP server hostname |
 | `EMAIL_PORT` | No | `587` | SMTP port |
 | `EMAIL_USER` | No | — | SMTP login (blank = Ethereal fallback) |
 | `EMAIL_PASS` | No | — | SMTP password |
 | `EMAIL_FROM` | No | `wasiyya <noreply@wasiyya.com>` | From address in emails |
-| `FRONTEND_URL` | No | `http://localhost:3000` | Used to build email access links |
+| `FRONTEND_URL` | No | `http://localhost:3000` | Used in email links and OAuth redirects |
+| `BACKEND_URL` | No | `http://localhost:3001` | Used to build OAuth callback URLs |
+| `GOOGLE_CLIENT_ID` | No | — | Google OAuth client ID (placeholder = disabled) |
+| `GOOGLE_CLIENT_SECRET` | No | — | Google OAuth client secret |
+| `GITHUB_CLIENT_ID` | No | — | GitHub OAuth client ID (placeholder = disabled) |
+| `GITHUB_CLIENT_SECRET` | No | — | GitHub OAuth client secret |
 | `MAX_FILE_SIZE` | No | `10485760` | Max upload size in bytes (10 MB) |
 | `UPLOAD_PATH` | No | `./uploads` | Directory for uploaded files |
 | `TIME_UNIT` | No | `days` | `minutes` for testing, `days` for production |
@@ -723,7 +783,7 @@ Login with email and password.
 { "email": "omar@example.com", "password": "MyPass@123" }
 ```
 
-**Success Response — `200 OK`:**
+**Success Response — `200 OK` (no 2FA):**
 ```json
 {
   "success": true,
@@ -734,9 +794,89 @@ Login with email and password.
 }
 ```
 
+**Success Response — `200 OK` (2FA enabled):**
+```json
+{
+  "success": true,
+  "requires2FA": true,
+  "tempToken": "eyJhbGc..."
+}
+```
+When `requires2FA` is true, the client must call `POST /auth/2fa/verify` with the `tempToken` and the TOTP code to receive the full JWT.
+
 **Error Responses:**
 - `400` — Missing fields
 - `401` — Wrong credentials or account disabled
+
+---
+
+#### `GET /auth/2fa/setup`
+Generate a new TOTP secret and QR code. Requires authentication.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "qrCode": "data:image/png;base64,...",
+    "secret": "JBSWY3DPEHPK3PXP"
+  }
+}
+```
+Scan the QR code with Google Authenticator or Authy, then call `POST /auth/2fa/enable` to activate.
+
+---
+
+#### `POST /auth/2fa/enable`
+Enable 2FA after scanning the QR code. Requires authentication.
+
+**Request Body:**
+```json
+{ "code": "123456" }
+```
+
+---
+
+#### `POST /auth/2fa/verify`
+Complete login when 2FA is enabled. **No authentication required** — uses the `tempToken` from login.
+
+**Request Body:**
+```json
+{ "tempToken": "eyJhbGc...", "code": "123456" }
+```
+
+**Success Response — `200 OK`:**
+```json
+{
+  "success": true,
+  "data": {
+    "user": { "id": "uuid", "full_name": "...", "role": "user" },
+    "token": "eyJhbGc..."
+  }
+}
+```
+
+---
+
+#### `POST /auth/2fa/disable`
+Disable 2FA. Requires authentication + valid TOTP code.
+
+**Request Body:**
+```json
+{ "code": "123456" }
+```
+
+---
+
+#### `GET /auth/google`
+Redirect to Google OAuth consent screen. **No authentication required.**
+
+---
+
+#### `GET /auth/github`
+Redirect to GitHub OAuth authorization screen. **No authentication required.**
+
+Both OAuth flows redirect back to `FRONTEND_URL/login?token=<jwt>&role=<role>` on success, or `FRONTEND_URL/login?error=1` on failure.
 
 ---
 
@@ -868,6 +1008,25 @@ Download a document. Streams the file binary.
 #### `DELETE /documents/:id`
 Delete a document (removes DB record and file from disk).
 
+#### `POST /documents/verify/:id`
+Verify document integrity and digital signature.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "intact": true,
+    "hash_match": true,
+    "signature_valid": true,
+    "stored_hash": "a3f1...",
+    "current_hash": "a3f1...",
+    "message": "الملف سليم والتوقيع صحيح"
+  }
+}
+```
+Returns `intact: false` if the file has been tampered with since upload.
+
 ---
 
 ### Beneficiaries — `/api/beneficiaries`
@@ -963,7 +1122,7 @@ Get current check-in status for the dashboard.
 ```json
 {
   "status": "ok",
-  "phase": 1,
+  "phase": 2,
   "time_unit": "minutes",
   "timestamp": "2026-05-09T10:00:00.000Z"
 }
@@ -1069,15 +1228,43 @@ Reset a triggered will back to active. Clears `triggered_at` and all beneficiary
 
 ## 11. Authentication & Authorization
 
-### JWT Flow
+### JWT Flow (no 2FA)
 
 ```
 1. Client sends POST /api/auth/login
-2. Server validates credentials
+2. Server validates credentials (bcrypt compare)
 3. Server signs: jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: '24h' })
 4. Client stores token in localStorage
 5. All subsequent requests: Authorization: Bearer <token>
 6. AuthMiddleware verifies token → loads user from DB → sets req.user
+```
+
+### 2FA Login Flow
+
+```
+1. Client sends POST /api/auth/login
+2. Server detects user.two_fa_enabled = 1
+3. Server returns: { requires2FA: true, tempToken }
+   → tempToken is a short-lived JWT (5 min) with { pending2FA: true }
+4. Client shows OTP input screen
+5. Client sends POST /api/auth/2fa/verify { tempToken, code }
+6. Server verifies tempToken (not expired, pending2FA flag present)
+7. Server verifies TOTP code with speakeasy
+8. Server issues full JWT → client stores and proceeds normally
+```
+
+### OAuth Flow (Google / GitHub)
+
+```
+1. User clicks Google/GitHub button → browser navigates to /api/auth/google
+2. Passport redirects to provider consent screen
+3. Provider redirects back to /api/auth/google/callback
+4. Passport verifies and calls findOrCreateOAuthUser:
+   - Finds existing account by oauth_provider + oauth_id
+   - OR links to existing account by matching email
+   - OR creates new account with a random bcrypt password
+5. Server signs JWT, redirects to: FRONTEND_URL/login?token=<jwt>&role=<role>
+6. Login.jsx useEffect reads URL params, calls /api/auth/me, stores token
 ```
 
 ### AuthMiddleware (`auth.middleware.js`)
@@ -1104,10 +1291,17 @@ router.use(authenticate, authorize('admin'));  // Admin-only route
 |---------------|--------------|---------------|
 | `/api/auth/register` | No | — |
 | `/api/auth/login` | No | — |
+| `/api/auth/2fa/verify` | No | — (uses tempToken) |
+| `/api/auth/google` | No | — |
+| `/api/auth/github` | No | — |
+| `/api/auth/google/callback` | No | — |
+| `/api/auth/github/callback` | No | — |
 | `/api/beneficiaries/access/:token` | No | — |
 | `/api/health` | No | — |
-| `/api/wills`, `/api/assets`, etc. | Yes | any authenticated |
-| `/api/admin/*` | Yes | admin only |
+| `/api/auth/me`, `/api/auth/logout` | Yes | any authenticated |
+| `/api/auth/2fa/setup`, `/api/auth/2fa/enable`, `/api/auth/2fa/disable` | Yes | any authenticated |
+| `/api/wills`, `/api/assets`, `/api/documents`, etc. | Yes | `user` or `manager` only |
+| `/api/admin/*` | Yes | `admin` only |
 
 ### Frontend Route Guards
 
@@ -1301,16 +1495,17 @@ The admin panel is a completely separate system experience. Admins are redirecte
 
 | Path | Component | Auth | Role | Description |
 |------|-----------|------|------|-------------|
-| `/login` | Login | No | — | Login form |
-| `/register` | Register | No | — | Registration form |
+| `/login` | Login | No | — | Login form + 2FA step + OAuth redirect handler |
+| `/register` | Register | No | — | Registration form + OAuth buttons |
 | `/` | SmartRedirect | No | — | Redirects by auth/role |
 | `*` | SmartRedirect | No | — | 404 → smart redirect |
 | `/dashboard` | Dashboard | Yes | user | Check-in status overview |
 | `/will` | MyWill | Yes | user | Will creation & settings |
 | `/assets` | Assets | Yes | user | Asset management |
-| `/documents` | Documents | Yes | user | Document upload/manage |
+| `/documents` | Documents | Yes | user | Document upload/manage + verify |
 | `/beneficiaries` | Beneficiaries | Yes | user | Trustee management |
 | `/verification` | Verification | Yes | user | Check-in submission page |
+| `/settings/2fa` | TwoFactorSetup | Yes | user | Enable/disable 2FA + QR code |
 | `/admin` | AdminPanel | Yes | admin | Admin panel (5 tabs) |
 | `/admin?tab=users` | AdminPanel | Yes | admin | Users tab |
 | `/admin?tab=wills` | AdminPanel | Yes | admin | Wills tab |
@@ -1324,7 +1519,7 @@ The admin panel is a completely separate system experience. Admins are redirecte
 Role-aware navigation sidebar. Renders completely different links for admin vs user:
 
 - **Admin links**: لوحة التحكم, المستخدمون, الوصايا, السجلات, أدوات التيست
-- **User links**: الرئيسية, وصيّتي, الأصول, الوثائق, الورثة, تجديد الوجود
+- **User links**: الرئيسية, وصيّتي, الأصول, الوثائق, الورثة, تجديد الوجود, المصادقة الثنائية
 
 Shows user name, email, and role badge. Logout button at bottom.
 
@@ -1383,48 +1578,52 @@ Setting `TIME_UNIT=minutes` in `.env` activates test mode:
 
 ## 17. Security
 
-### Implemented (Phase 1)
+### Implemented
 
 | Feature | Implementation |
 |---------|---------------|
 | JWT Authentication | HS256 signed tokens, 24h expiry, verified on every request |
-| RBAC | Role checked after JWT verification for protected routes |
+| bcrypt Password Hashing | Cost factor 12; plaintext passwords auto-migrated on first login |
+| RBAC | Role checked after JWT verification; admin blocked from all will routes |
+| Two-Factor Authentication | TOTP via speakeasy — compatible with Google Authenticator and Authy |
+| OAuth (Google + GitHub) | Passport strategies; find-or-create by oauth_id or email; links existing accounts |
+| AES-256-GCM Encryption | All uploaded documents encrypted at rest; transparent decryption on download |
+| Document Integrity | SHA-256 hash computed at upload, stored in `documents.sha256_hash` |
+| Digital Signatures | RSA-2048 auto-generated key pair (`certs/`); each document signed at upload |
+| Document Verification | `/verify` endpoint + UI modal — confirms hash match and signature validity |
+| HTTPS Support | Automatic HTTPS when SSL certs present; HTTP→HTTPS redirect on `HTTP_PORT` |
 | Rate Limiting | 500 requests per 15-minute window per IP |
 | Helmet | Sets 15+ security HTTP headers (XSS protection, HSTS, etc.) |
 | CORS | Restricted to `FRONTEND_URL` only |
 | File Type Validation | Multer rejects non-allowed MIME types |
 | File Size Limit | 10 MB max per upload |
 | Token Expiry | Beneficiary access tokens expire after 7 days |
-| Account Disable | Admin can block accounts; disabled accounts are rejected even with valid JWT |
+| Account Disable | Admin can block accounts; disabled accounts rejected even with valid JWT |
 | Audit Trail | Every significant action logged with IP address |
 | Self-disable Protection | Admin cannot disable their own account |
-| HTTPS Support | Automatically uses HTTPS if SSL certificates exist |
+| 2FA Temp Token | Second-step login uses a short-lived JWT (5 min, `pending2FA` flag) |
 
-### Known Limitations (Phase 1 Stubs)
+### Known Limitations
 
-| Limitation | Phase 2 Fix |
-|------------|-------------|
-| Passwords stored as plaintext | bcrypt hashing |
-| Asset content stored unencrypted | AES-256-GCM encryption, IV stored in `assets.iv` |
-| Documents not integrity-checked | SHA-256 hash stored in `documents.sha256_hash` |
-| No two-factor authentication | TOTP (Google Authenticator compatible), secret in `two_fa_secret` |
-| No OAuth | Google/GitHub SSO, stored in `oauth_provider` + `oauth_id` |
-| No document digital signature | RSA/ECDSA signing, stored in `documents.signature` |
-| JWT not invalidatable before expiry | Token blacklist / refresh token pattern |
-| No HTTPS enforcement | Force redirect HTTP → HTTPS |
-
-> The database schema already includes all columns for Phase 2 — no schema migrations needed.
+| Limitation | Notes |
+|------------|-------|
+| JWT not invalidatable before expiry | Refresh token / blacklist pattern not yet implemented |
+| Asset content not encrypted | `assets.iv` column exists in schema — encryption not yet applied to assets |
+| No email verification on register | Users can register with any email; no confirmation step |
+| No password reset flow | No forgot-password / reset-via-email flow yet |
 
 ---
 
 ## 18. Phase 2 Roadmap
 
-- [ ] `bcrypt` password hashing (cost factor 12)
-- [ ] AES-256-GCM encryption for all asset content
-- [ ] SHA-256 integrity verification for uploaded documents
-- [ ] Digital signatures (RSA-2048 or ECDSA P-256) for documents
-- [ ] TOTP two-factor authentication
-- [ ] Google / GitHub OAuth login
+- [x] `bcrypt` password hashing (cost factor 12) — auto-migration on login
+- [x] AES-256-GCM encryption for uploaded documents (at-rest encryption)
+- [x] SHA-256 integrity verification for uploaded documents
+- [x] Digital signatures (RSA-2048) for documents — auto-generated key pair
+- [x] TOTP two-factor authentication — Google Authenticator / Authy compatible
+- [x] Google / GitHub OAuth login — find-or-create, email linking
+- [x] HTTP → HTTPS automatic redirect when SSL certificates present
+- [ ] AES-256-GCM encryption for asset content (`assets.iv` column ready)
 - [ ] Refresh token pattern (short-lived access tokens + long-lived refresh)
 - [ ] Email verification on registration
 - [ ] Password reset via email flow
