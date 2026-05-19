@@ -14,6 +14,7 @@ import Beneficiaries    from './pages/Beneficiaries';
 import Verification     from './pages/Verification';
 import AdminPanel       from './pages/AdminPanel';
 import BeneficiaryAccess from './pages/BeneficiaryAccess';
+import TwoFactorSetup  from './pages/TwoFactorSetup';
 
 // Redirect to correct home based on role
 const SmartRedirect = () => {
@@ -39,7 +40,8 @@ const App = () => (
                 <Route path="/assets"       element={<ProtectedRoute><Assets /></ProtectedRoute>} />
                 <Route path="/documents"    element={<ProtectedRoute><Documents /></ProtectedRoute>} />
                 <Route path="/beneficiaries" element={<ProtectedRoute><Beneficiaries /></ProtectedRoute>} />
-                <Route path="/verification" element={<ProtectedRoute><Verification /></ProtectedRoute>} />
+                <Route path="/verification"  element={<ProtectedRoute><Verification /></ProtectedRoute>} />
+                <Route path="/settings/2fa" element={<ProtectedRoute><TwoFactorSetup /></ProtectedRoute>} />
 
                 {/* Admin routes */}
                 <Route path="/admin" element={

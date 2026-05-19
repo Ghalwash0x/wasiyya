@@ -9,6 +9,7 @@ const userLinks = [
     { to: '/documents',     label: 'الوثائق',        icon: '📁' },
     { to: '/beneficiaries', label: 'الورثة',         icon: '👥' },
     { to: '/verification',  label: 'تجديد الوجود',   icon: '✅' },
+    { to: '/settings/2fa', label: 'المصادقة الثنائية', icon: '🔐' },
 ];
 
 const adminLinks = [

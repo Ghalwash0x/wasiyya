@@ -1,6 +1,9 @@
-const pool = require('../config/database');
-const jwt  = require('jsonwebtoken');
+const pool    = require('../config/database');
+const jwt     = require('jsonwebtoken');
+const bcrypt  = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
+
+const BCRYPT_ROUNDS = 12;
 
 const validatePassword = (password) => {
     const errors = [];
@@ -33,10 +36,12 @@ const register = async (req, res) => {
             return res.status(409).json({ success: false, message: 'البريد الإلكتروني مسجل مسبقاً' });
         }
 
+        const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
         const id = uuidv4();
+
         await pool.query(
             `INSERT INTO users (id, full_name, email, password, role) VALUES ($1, $2, $3, $4, 'user')`,
-            [id, full_name, email, password]
+            [id, full_name, email, hashedPassword]
         );
 
         const result = await pool.query(
@@ -80,8 +85,31 @@ const login = async (req, res) => {
 
         const user = result.rows[0];
 
-        if (password !== user.password) {
+        // Support both bcrypt hashes and legacy plaintext (auto-migrates on login)
+        let passwordValid = false;
+        if (user.password.startsWith('$2b$') || user.password.startsWith('$2a$')) {
+            passwordValid = await bcrypt.compare(password, user.password);
+        } else {
+            // Legacy plaintext — compare then upgrade to bcrypt
+            passwordValid = (password === user.password);
+            if (passwordValid) {
+                const hashed = await bcrypt.hash(password, BCRYPT_ROUNDS);
+                await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashed, user.id]);
+            }
+        }
+
+        if (!passwordValid) {
             return res.status(401).json({ success: false, message: 'بيانات الدخول غير صحيحة' });
+        }
+
+        // If 2FA is enabled, return a temporary token instead of the full JWT
+        if (user.two_fa_enabled) {
+            const tempToken = jwt.sign(
+                { userId: user.id, pending2FA: true },
+                process.env.JWT_SECRET,
+                { expiresIn: '5m' }
+            );
+            return res.json({ success: true, requires2FA: true, tempToken });
         }
 
         const token = jwt.sign(
@@ -95,8 +123,8 @@ const login = async (req, res) => {
             [uuidv4(), user.id, 'USER_LOGIN', req.ip]
         );
 
-        const { password: _, ...userWithoutPassword } = user;
-        res.json({ success: true, message: 'تم تسجيل الدخول بنجاح', data: { user: userWithoutPassword, token } });
+        const { password: _, two_fa_secret: __, ...userWithoutSecrets } = user;
+        res.json({ success: true, message: 'تم تسجيل الدخول بنجاح', data: { user: userWithoutSecrets, token } });
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
@@ -106,7 +134,7 @@ const login = async (req, res) => {
 const getMe = async (req, res) => {
     try {
         const result = await pool.query(
-            'SELECT id, full_name, email, role, last_checkin, created_at FROM users WHERE id = $1',
+            'SELECT id, full_name, email, role, two_fa_enabled, last_checkin, created_at FROM users WHERE id = $1',
             [req.user.id]
         );
         res.json({ success: true, data: result.rows[0] });

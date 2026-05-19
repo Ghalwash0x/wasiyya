@@ -1,9 +1,12 @@
-const express    = require('express');
-const https      = require('https');
-const fs         = require('fs');
-const helmet     = require('helmet');
-const cors       = require('cors');
-const rateLimit  = require('express-rate-limit');
+const express   = require('express');
+const https     = require('https');
+const http      = require('http');
+const fs        = require('fs');
+const helmet    = require('helmet');
+const cors      = require('cors');
+const rateLimit = require('express-rate-limit');
+const session   = require('express-session');
+const passport  = require('./middleware/passport');
 require('dotenv').config();
 
 const authRoutes        = require('./routes/auth.routes');
@@ -34,6 +37,16 @@ app.use(limiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Session needed only for Passport OAuth redirect cycle
+app.use(session({
+    secret: process.env.SESSION_SECRET || process.env.JWT_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: process.env.NODE_ENV === 'production', maxAge: 5 * 60 * 1000 }
+}));
+app.use(passport.initialize());
+app.use(passport.session());
+
 app.use('/api/auth',          authRoutes);
 app.use('/api/wills',         willRoutes);
 app.use('/api/assets',        assetRoutes);
@@ -44,8 +57,8 @@ app.use('/api/admin',         adminRoutes);
 
 app.get('/api/health', (req, res) => {
     res.json({
-        status: 'ok',
-        phase: 1,
+        status:    'ok',
+        phase:     2,
         time_unit: process.env.TIME_UNIT || 'days',
         timestamp: new Date()
     });
@@ -64,14 +77,21 @@ app.use((err, req, res, next) => {
 
 startCheckinCron();
 
-const PORT = process.env.PORT || 3001;
-
-const certPath = process.env.SSL_CERT_PATH || './certs/server.cert';
-const keyPath  = process.env.SSL_KEY_PATH  || './certs/server.key';
+const PORT      = process.env.PORT || 3001;
+const HTTP_PORT = process.env.HTTP_PORT || 3080;
+const certPath  = process.env.SSL_CERT_PATH || './certs/server.cert';
+const keyPath   = process.env.SSL_KEY_PATH  || './certs/server.key';
 
 if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+    // HTTPS server
     https.createServer({ key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) }, app)
         .listen(PORT, () => console.log(`🔐 HTTPS — https://localhost:${PORT}`));
+
+    // HTTP → HTTPS redirect
+    http.createServer((req, res) => {
+        res.writeHead(301, { Location: `https://${req.headers.host.replace(/:\d+/, `:${PORT}`)}${req.url}` });
+        res.end();
+    }).listen(HTTP_PORT, () => console.log(`↪️  HTTP redirect — http://localhost:${HTTP_PORT} → HTTPS`));
 } else {
     app.listen(PORT, () => {
         console.log(`🚀 Wasiyya backend — http://localhost:${PORT}`);
