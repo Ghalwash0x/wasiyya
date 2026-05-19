@@ -7,7 +7,12 @@ const authorize = (...allowedRoles) => {
             });
         }
 
-        if (!allowedRoles.includes(req.user.role)) {
+        // Developer has implicit access everywhere admin is allowed
+        const effective = req.user.role === 'developer' && allowedRoles.includes('admin')
+            ? [...allowedRoles, 'developer']
+            : allowedRoles;
+
+        if (!effective.includes(req.user.role)) {
             return res.status(403).json({
                 success: false,
                 message: 'ليس لديك صلاحية للوصول لهذا المورد'

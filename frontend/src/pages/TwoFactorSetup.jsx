@@ -6,7 +6,7 @@ import api     from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 const TwoFactorSetup = () => {
-    const { user } = useAuth();
+    const { user, refreshUser } = useAuth();
     const navigate = useNavigate();
 
     const [step,    setStep]    = useState('idle');   // idle | setup | verify
@@ -34,6 +34,7 @@ const TwoFactorSetup = () => {
         setLoading(true); setMsg(null);
         try {
             await api.post('/auth/2fa/enable', { code });
+            await refreshUser();
             setMsg({ type: 'success', text: 'تم تفعيل المصادقة الثنائية بنجاح ✅' });
             setStep('done');
         } catch (e) {
@@ -48,6 +49,7 @@ const TwoFactorSetup = () => {
         setLoading(true); setMsg(null);
         try {
             await api.post('/auth/2fa/disable', { code });
+            await refreshUser();
             setMsg({ type: 'success', text: 'تم إلغاء المصادقة الثنائية' });
             setStep('idle');
             setCode('');

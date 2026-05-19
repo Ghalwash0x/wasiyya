@@ -38,20 +38,31 @@ const oauthSuccess = async (req, res) => {
     }
 };
 
+// Guard: return 501 if OAuth provider is not configured
+const requireOAuth = (provider) => (req, res, next) => {
+    try {
+        passport._strategy(provider);  // throws if not registered
+        next();
+    } catch {
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        res.redirect(`${frontendUrl}/login?error=oauth_not_configured`);
+    }
+};
+
 // Google OAuth
-router.get('/google',
+router.get('/google', requireOAuth('google'),
     passport.authenticate('google', { scope: ['profile', 'email'], session: false })
 );
-router.get('/google/callback',
+router.get('/google/callback', requireOAuth('google'),
     passport.authenticate('google', { session: false, failureRedirect: '/login?error=google_failed' }),
     oauthSuccess
 );
 
 // GitHub OAuth
-router.get('/github',
+router.get('/github', requireOAuth('github'),
     passport.authenticate('github', { scope: ['user:email'], session: false })
 );
-router.get('/github/callback',
+router.get('/github/callback', requireOAuth('github'),
     passport.authenticate('github', { session: false, failureRedirect: '/login?error=github_failed' }),
     oauthSuccess
 );

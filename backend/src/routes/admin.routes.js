@@ -7,7 +7,7 @@ const {
 const { authenticate } = require('../middleware/auth.middleware');
 const { authorize }    = require('../middleware/rbac.middleware');
 
-router.use(authenticate, authorize('admin'));
+router.use(authenticate, authorize('admin', 'developer'));
 
 // User management
 router.get('/users',               getAllUsers);

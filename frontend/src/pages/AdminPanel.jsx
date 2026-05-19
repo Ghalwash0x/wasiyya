@@ -375,9 +375,25 @@ const TestTab = ({ users, timeUnit, emailMode, triggeredWills, onRefresh }) => {
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-sm font-medium">{b.name}</p>
                                                 <p className="text-xs text-gray-500">{b.email}</p>
+                                                {b.notified_at && (
+                                                    <p className="text-xs text-gray-400 mt-0.5">
+                                                        أُبلغ: {new Date(b.notified_at).toLocaleString('ar')}
+                                                    </p>
+                                                )}
                                             </div>
-                                            <div className="flex gap-2 flex-wrap">
-                                                {b.token_valid && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">صالح</span>}
+                                            <div className="flex gap-2 flex-wrap items-center">
+                                                {/* Email delivery status */}
+                                                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                                                    b.email_status === 'sent'    ? 'bg-green-100 text-green-700'
+                                                    : b.email_status === 'failed' ? 'bg-red-100 text-red-700'
+                                                    : 'bg-gray-100 text-gray-500'
+                                                }`}>
+                                                    {b.email_status === 'sent' ? '✅ أُرسل'
+                                                    : b.email_status === 'failed' ? '❌ فشل'
+                                                    : '⏳ معلّق'}
+                                                </span>
+                                                {b.token_valid && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">رابط صالح</span>}
+                                                {b.accessed_at && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">تم الفتح</span>}
                                                 {b.access_url && (
                                                     <a href={b.access_url} target="_blank" rel="noopener noreferrer"
                                                         className="text-xs bg-indigo-600 text-white px-3 py-1 rounded font-medium hover:bg-indigo-700">

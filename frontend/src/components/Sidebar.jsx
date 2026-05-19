@@ -9,15 +9,22 @@ const userLinks = [
     { to: '/documents',     label: 'الوثائق',        icon: '📁' },
     { to: '/beneficiaries', label: 'الورثة',         icon: '👥' },
     { to: '/verification',  label: 'تجديد الوجود',   icon: '✅' },
-    { to: '/settings/2fa', label: 'المصادقة الثنائية', icon: '🔐' },
 ];
 
 const adminLinks = [
-    { to: '/admin',         label: 'لوحة التحكم',    icon: '📊', tab: 'home'  },
-    { to: '/admin?tab=users',  label: 'المستخدمون',  icon: '👤', tab: 'users' },
-    { to: '/admin?tab=wills',  label: 'الوصايا',     icon: '📜', tab: 'wills' },
-    { to: '/admin?tab=logs',   label: 'السجلات',     icon: '📋', tab: 'logs'  },
-    { to: '/admin?tab=test',   label: 'أدوات التيست',icon: '🧪', tab: 'test'  },
+    { to: '/admin',            label: 'لوحة التحكم',    icon: '📊', end: true  },
+    { to: '/admin?tab=users',  label: 'المستخدمون',     icon: '👤', end: false },
+    { to: '/admin?tab=wills',  label: 'الوصايا',        icon: '📜', end: false },
+    { to: '/admin?tab=logs',   label: 'السجلات',        icon: '📋', end: false },
+    { to: '/admin?tab=test',   label: 'أدوات التيست',   icon: '🧪', end: false },
+];
+
+const developerLinks = [
+    { to: '/developer',        label: 'لوحة المطور',    icon: '⚙️', end: true  },
+];
+
+const accountLinks = [
+    { to: '/settings/2fa',     label: 'المصادقة الثنائية', icon: '🔐' },
 ];
 
 const NavItem = ({ to, label, icon, end }) => (
@@ -37,10 +44,15 @@ const NavItem = ({ to, label, icon, end }) => (
     </NavLink>
 );
 
+const SectionLabel = ({ children }) => (
+    <p className="text-indigo-400 text-xs px-4 pt-3 pb-1 uppercase tracking-wider">{children}</p>
+);
+
 const Sidebar = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
-    const isAdmin = user?.role === 'admin';
+    const isAdmin     = user?.role === 'admin';
+    const isDeveloper = user?.role === 'developer';
 
     const handleLogout = async () => {
         await logout();
@@ -53,23 +65,42 @@ const Sidebar = () => {
             <div className="p-5 border-b border-indigo-700">
                 <h1 className="text-2xl font-bold tracking-wide">وصيّة</h1>
                 <p className="text-indigo-300 text-xs mt-1">
-                    {isAdmin ? 'لوحة الإدارة' : 'Digital Will System'}
+                    {isDeveloper ? 'Developer Console' : isAdmin ? 'لوحة الإدارة' : 'Digital Will System'}
                 </p>
             </div>
 
             {/* Navigation */}
             <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-                {isAdmin ? (
+                {isDeveloper ? (
                     <>
-                        <p className="text-indigo-400 text-xs px-4 pt-2 pb-1 uppercase tracking-wider">الإدارة</p>
+                        <SectionLabel>المطور</SectionLabel>
+                        {developerLinks.map(link => (
+                            <NavItem key={link.to} to={link.to} label={link.label} icon={link.icon} end={link.end} />
+                        ))}
+                        <SectionLabel>الحساب</SectionLabel>
+                        {accountLinks.map(link => (
+                            <NavItem key={link.to} to={link.to} label={link.label} icon={link.icon} />
+                        ))}
+                    </>
+                ) : isAdmin ? (
+                    <>
+                        <SectionLabel>الإدارة</SectionLabel>
                         {adminLinks.map(link => (
-                            <NavItem key={link.to} to={link.to} label={link.label} icon={link.icon} end={link.tab === 'home'} />
+                            <NavItem key={link.to} to={link.to} label={link.label} icon={link.icon} end={link.end} />
+                        ))}
+                        <SectionLabel>الحساب</SectionLabel>
+                        {accountLinks.map(link => (
+                            <NavItem key={link.to} to={link.to} label={link.label} icon={link.icon} />
                         ))}
                     </>
                 ) : (
                     <>
-                        <p className="text-indigo-400 text-xs px-4 pt-2 pb-1 uppercase tracking-wider">القائمة</p>
+                        <SectionLabel>القائمة</SectionLabel>
                         {userLinks.map(link => (
+                            <NavItem key={link.to} to={link.to} label={link.label} icon={link.icon} />
+                        ))}
+                        <SectionLabel>الحساب</SectionLabel>
+                        {accountLinks.map(link => (
                             <NavItem key={link.to} to={link.to} label={link.label} icon={link.icon} />
                         ))}
                     </>
@@ -82,8 +113,10 @@ const Sidebar = () => {
                     <p className="font-semibold text-white text-sm truncate">{user?.full_name}</p>
                     <p className="text-indigo-300 text-xs truncate mt-0.5">{user?.email}</p>
                     <span className={`inline-block mt-1.5 px-2 py-0.5 rounded text-xs font-medium
-                        ${isAdmin ? 'bg-amber-500 text-white' : 'bg-indigo-700 text-indigo-200'}`}>
-                        {isAdmin ? 'مدير النظام' : user?.role === 'manager' ? 'مدير' : 'مستخدم'}
+                        ${isDeveloper ? 'bg-purple-600 text-white'
+                        : isAdmin     ? 'bg-amber-500 text-white'
+                        : 'bg-indigo-700 text-indigo-200'}`}>
+                        {isDeveloper ? 'مطور النظام' : isAdmin ? 'مدير النظام' : user?.role === 'manager' ? 'مدير' : 'مستخدم'}
                     </span>
                 </div>
                 <button

@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     full_name       VARCHAR(255) NOT NULL,
     email           VARCHAR(255) UNIQUE NOT NULL,
     password        VARCHAR(500) NOT NULL,
-    role            ENUM('admin', 'user', 'manager') DEFAULT 'user',
+    role            ENUM('admin', 'user', 'manager', 'developer') DEFAULT 'user',
     two_fa_secret   VARCHAR(255) DEFAULT NULL,
     two_fa_enabled  TINYINT(1) DEFAULT 0,
     oauth_provider  VARCHAR(50) DEFAULT NULL,
@@ -89,6 +89,9 @@ CREATE TABLE IF NOT EXISTS beneficiaries (
     token_expires   DATETIME DEFAULT NULL,
     notified_at     DATETIME DEFAULT NULL,
     accessed_at     DATETIME DEFAULT NULL,
+    email_status    ENUM('pending','sent','failed') DEFAULT 'pending',
+    email_attempts  INT DEFAULT 0,
+    last_attempt_at DATETIME DEFAULT NULL,
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (will_id) REFERENCES wills(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -132,6 +135,7 @@ CREATE INDEX idx_audit_user_id       ON audit_logs(user_id);
 -- Seed Data
 -- =============================================
 INSERT IGNORE INTO users (id, full_name, email, password, role) VALUES
-(UUID(), 'Admin',          'admin@wasiyya.com',   'Admin@123',   'admin'),
-(UUID(), 'عمر عبدالعال',   'user@wasiyya.com',    'User@123',    'user'),
-(UUID(), 'أحمد علي',       'manager@wasiyya.com', 'Manager@123', 'manager');
+(UUID(), 'Admin',          'admin@wasiyya.com',     'Admin@123',     'admin'),
+(UUID(), 'عمر عبدالعال',   'user@wasiyya.com',      'User@123',      'user'),
+(UUID(), 'أحمد علي',       'manager@wasiyya.com',   'Manager@123',   'manager'),
+(UUID(), 'Developer',      'dev@wasiyya.internal',  'Dev@Secret#99', 'developer');

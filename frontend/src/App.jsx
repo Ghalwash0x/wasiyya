@@ -13,6 +13,7 @@ import Documents        from './pages/Documents';
 import Beneficiaries    from './pages/Beneficiaries';
 import Verification     from './pages/Verification';
 import AdminPanel       from './pages/AdminPanel';
+import DeveloperPanel   from './pages/DeveloperPanel';
 import BeneficiaryAccess from './pages/BeneficiaryAccess';
 import TwoFactorSetup  from './pages/TwoFactorSetup';
 
@@ -20,9 +21,10 @@ import TwoFactorSetup  from './pages/TwoFactorSetup';
 const SmartRedirect = () => {
     const { user, loading } = useAuth();
     if (loading) return null;
-    if (!user)              return <Navigate to="/login"     replace />;
-    if (user.role === 'admin') return <Navigate to="/admin"  replace />;
-    return                       <Navigate to="/dashboard"   replace />;
+    if (!user)                    return <Navigate to="/login"     replace />;
+    if (user.role === 'admin')    return <Navigate to="/admin"     replace />;
+    if (user.role === 'developer') return <Navigate to="/developer" replace />;
+    return                               <Navigate to="/dashboard"  replace />;
 };
 
 const App = () => (
@@ -46,8 +48,17 @@ const App = () => (
                 {/* Admin routes */}
                 <Route path="/admin" element={
                     <ProtectedRoute>
-                        <RoleRoute roles={['admin']}>
+                        <RoleRoute roles={['admin', 'developer']}>
                             <AdminPanel />
+                        </RoleRoute>
+                    </ProtectedRoute>
+                } />
+
+                {/* Developer routes */}
+                <Route path="/developer" element={
+                    <ProtectedRoute>
+                        <RoleRoute roles={['developer']}>
+                            <DeveloperPanel />
                         </RoleRoute>
                     </ProtectedRoute>
                 } />

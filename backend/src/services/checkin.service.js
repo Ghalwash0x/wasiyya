@@ -28,12 +28,19 @@ const triggerWill = async (willId, userId) => {
         const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
         await pool.query(
-            `UPDATE beneficiaries SET access_token = $1, token_expires = $2, notified_at = NOW() WHERE id = $3`,
+            `UPDATE beneficiaries SET access_token = $1, token_expires = $2, notified_at = NOW(),
+             email_status = 'pending', email_attempts = 0 WHERE id = $3`,
             [token, expires, ben.id]
         );
 
-        await emailService.sendBeneficiaryNotification(ben.email, ben.name, token, ben.id);
-        console.log(`📧 Notified beneficiary: ${ben.email}`);
+        const emailResult = await emailService.sendBeneficiaryNotification(ben.email, ben.name, token, ben.id);
+        const emailStatus = emailResult.error ? 'failed' : 'sent';
+        await pool.query(
+            `UPDATE beneficiaries SET email_status = $1, email_attempts = email_attempts + 1,
+             last_attempt_at = NOW() WHERE id = $2`,
+            [emailStatus, ben.id]
+        );
+        console.log(`📧 Notified beneficiary: ${ben.email} [${emailStatus}]`);
     }
 
     await pool.query(

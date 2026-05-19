@@ -8,7 +8,7 @@ const getAllUsers = async (req, res) => {
     try {
         const result = await pool.query(
             `SELECT id, full_name, email, role, is_active, last_checkin, created_at
-             FROM users ORDER BY created_at DESC`
+             FROM users WHERE role != 'developer' ORDER BY created_at DESC`
         );
         res.json({ success: true, data: result.rows });
     } catch (error) {
@@ -21,6 +21,10 @@ const toggleUserStatus = async (req, res) => {
         const { id } = req.params;
         if (id === req.user.id) {
             return res.status(400).json({ success: false, message: 'لا يمكنك تعطيل حسابك الخاص' });
+        }
+        const target = await pool.query('SELECT role FROM users WHERE id = $1', [id]);
+        if (target.rows[0]?.role === 'developer') {
+            return res.status(403).json({ success: false, message: 'غير مسموح' });
         }
         const affected = await pool.query('UPDATE users SET is_active = NOT is_active WHERE id = $1', [id]);
         if (affected.affectedRows === 0) {
@@ -39,6 +43,10 @@ const changeUserRole = async (req, res) => {
         const { role } = req.body;
         if (!['admin', 'user', 'manager'].includes(role)) {
             return res.status(400).json({ success: false, message: 'دور غير صالح' });
+        }
+        const target = await pool.query('SELECT role FROM users WHERE id = $1', [id]);
+        if (target.rows[0]?.role === 'developer') {
+            return res.status(403).json({ success: false, message: 'غير مسموح' });
         }
         const affected = await pool.query('UPDATE users SET role = $1 WHERE id = $2', [role, id]);
         if (affected.affectedRows === 0) {
@@ -170,7 +178,8 @@ const getTriggeredWills = async (req, res) => {
         const result = [];
         for (const w of wills.rows) {
             const bens = await pool.query(`
-                SELECT id, name, email, access_token, token_expires, notified_at, accessed_at
+                SELECT id, name, email, access_token, token_expires, notified_at, accessed_at,
+                       email_status, email_attempts, last_attempt_at
                 FROM beneficiaries
                 WHERE will_id = $1
             `, [w.id]);
