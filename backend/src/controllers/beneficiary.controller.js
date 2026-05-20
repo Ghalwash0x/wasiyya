@@ -1,5 +1,6 @@
 const pool = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
+const { decryptText } = require('../services/encryption.service');
 
 const getBeneficiaries = async (req, res) => {
     try {
@@ -80,10 +81,10 @@ const getBeneficiaryAccess = async (req, res) => {
         const { token } = req.params;
 
         const result = await pool.query(
-            `SELECT b.*, w.title AS will_title, w.description AS will_description, w.id AS will_id
+            `SELECT b.*, w.title AS will_title, w.description AS will_description, w.id AS will_id, w.user_id AS owner_id
              FROM beneficiaries b
              JOIN wills w ON b.will_id = w.id
-             WHERE b.access_token = $1 AND b.token_expires > NOW()`,
+             WHERE b.access_token = $1 AND b.token_expires > NOW() AND w.status = 'triggered'`,
             [token]
         );
 
@@ -99,9 +100,16 @@ const getBeneficiaryAccess = async (req, res) => {
         );
 
         const assets = await pool.query(
-            'SELECT id, asset_type, title, content FROM assets WHERE will_id = $1',
+            'SELECT id, asset_type, title, content, iv FROM assets WHERE will_id = $1',
             [ben.will_id]
         );
+
+        const decryptedAssets = assets.rows.map((row) => ({
+            id: row.id,
+            asset_type: row.asset_type,
+            title: row.title,
+            content: decryptText(row.content, row.iv, ben.owner_id),
+        }));
 
         const documents = await pool.query(
             `SELECT id, original_name, file_size, mime_type, uploaded_at
@@ -114,7 +122,7 @@ const getBeneficiaryAccess = async (req, res) => {
             data: {
                 beneficiary: { name: ben.name, email: ben.email },
                 will: { title: ben.will_title, description: ben.will_description },
-                assets: assets.rows,
+                assets: decryptedAssets,
                 documents: documents.rows
             }
         });

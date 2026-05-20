@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
 import api from '../services/api';
+import { decryptAssets, decryptAssetContent } from '../utils/assetCrypto';
 
 const typeLabels = { account: 'حساب', bank: 'بنك', password: 'كلمة سر', info: 'معلومات', note: 'ملاحظة' };
 const typeIcons  = { account: '🔑', bank: '🏦', password: '🔐', info: 'ℹ️', note: '📝' };
@@ -9,28 +10,57 @@ const typeIcons  = { account: '🔑', bank: '🏦', password: '🔐', info: 'ℹ
 const Assets = () => {
     const [will, setWill]       = useState(null);
     const [assets, setAssets]   = useState([]);
+    const [walletKey, setWalletKey] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [keyError, setKeyError] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [form, setForm]       = useState({ asset_type: 'account', title: '', content: '' });
     const [saving, setSaving]   = useState(false);
     const [reveal, setReveal]   = useState({});
 
-    useEffect(() => {
-        api.get('/wills').then(r => {
-            const w = r.data.data[0];
-            setWill(w);
-            if (w) {
-                return api.get(`/assets/${w.id}`).then(ar => setAssets(ar.data.data));
-            }
-        }).finally(() => setLoading(false));
+    const loadEncryptedAssets = useCallback(async (willId, keyHex) => {
+        const ar = await api.get(`/assets/${willId}`);
+        const decrypted = await decryptAssets(ar.data.data, keyHex);
+        setAssets(decrypted);
     }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        (async () => {
+            try {
+                const keyRes = await api.get('/auth/wallet-key');
+                const keyHex = keyRes.data.data.key;
+                if (cancelled) return;
+                setWalletKey(keyHex);
+
+                const wRes = await api.get('/wills');
+                const w = wRes.data.data[0];
+                setWill(w);
+                if (w) {
+                    await loadEncryptedAssets(w.id, keyHex);
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    setKeyError(err.response?.data?.message || 'تعذّر تحميل مفتاح فك التشفير');
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+
+        return () => { cancelled = true; };
+    }, [loadEncryptedAssets]);
 
     const handleAdd = async (e) => {
         e.preventDefault();
+        if (!walletKey) return;
         setSaving(true);
         try {
             const r = await api.post('/assets', { ...form, will_id: will.id });
-            setAssets(prev => [r.data.data, ...prev]);
+            const row = r.data.data;
+            const content = await decryptAssetContent(row.content_encrypted, row.iv, walletKey);
+            setAssets(prev => [{ ...row, content }, ...prev]);
             setForm({ asset_type: 'account', title: '', content: '' });
             setShowForm(false);
         } catch (err) {
@@ -47,10 +77,22 @@ const Assets = () => {
 
     if (loading) return <div className="flex min-h-screen"><Sidebar /><div className="p-10 text-gray-500">جاري التحميل...</div></div>;
 
+    if (keyError) return (
+        <div className="flex min-h-screen">
+            <Sidebar />
+            <div className="flex-1 min-w-0 flex flex-col">
+                <Navbar title="الأصول" />
+                <div className="flex-1 flex items-center justify-center p-6">
+                    <div className="card max-w-md text-center text-red-600">{keyError}</div>
+                </div>
+            </div>
+        </div>
+    );
+
     if (!will) return (
         <div className="flex min-h-screen">
             <Sidebar />
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 min-w-0 flex flex-col">
                 <Navbar title="الأصول" />
                 <div className="flex-1 flex items-center justify-center text-gray-500">
                     يجب إنشاء وصية أولاً — <a href="/will" className="text-indigo-600 mr-1">إنشاء وصية</a>
@@ -62,9 +104,13 @@ const Assets = () => {
     return (
         <div className="flex min-h-screen">
             <Sidebar />
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 min-w-0 flex flex-col">
                 <Navbar title="الأصول النصية" />
-                <main className="flex-1 p-6">
+                <main className="flex-1 p-4 lg:p-6">
+                    <div className="bg-indigo-50 border border-indigo-100 text-indigo-800 text-sm px-4 py-3 rounded-lg mb-6">
+                        محتوى الأصول مشفّر في قاعدة البيانات (AES-256-GCM) ويُفكّ تشفيره في متصفحك فقط — لا يمكن لأي مستخدم آخر الوصول إليه.
+                    </div>
+
                     <div className="flex justify-between items-center mb-6">
                         <p className="text-gray-600 text-sm">{assets.length} أصل مسجل</p>
                         <button onClick={() => setShowForm(!showForm)} className="btn-primary">

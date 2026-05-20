@@ -3,6 +3,7 @@ const pool    = require('../config/database');
 const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
+const { getUserKeyHex } = require('../services/encryption.service');
 
 const BCRYPT_ROUNDS = 12;
 
@@ -293,4 +294,20 @@ const registerOAuth = async (req, res) => {
     }
 };
 
-module.exports = { register, login, getMe, logout, getPendingOAuth, registerOAuth };
+/** Decryption key for asset content — only the authenticated account owner (user/manager) */
+const getWalletKey = async (req, res) => {
+    try {
+        if (req.user.role !== 'user') {
+            return res.status(403).json({
+                success: false,
+                message: 'مفتاح فك التشفير متاح لصاحب الحساب فقط',
+            });
+        }
+        res.json({ success: true, data: { key: getUserKeyHex(req.user.id) } });
+    } catch (error) {
+        console.error('getWalletKey error:', error);
+        res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
+    }
+};
+
+module.exports = { register, login, getMe, logout, getPendingOAuth, registerOAuth, getWalletKey };

@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const pool      = require('../config/database');
 const {
     register, login, getMe, logout,
-    getPendingOAuth, registerOAuth,
+    getPendingOAuth, registerOAuth, getWalletKey,
 } = require('../controllers/auth.controller');
 const { setup2FA, enable2FA, verify2FA, disable2FA } = require('../controllers/twofa.controller');
 const { authenticate } = require('../middleware/auth.middleware');
@@ -18,6 +18,7 @@ router.post('/register/oauth', registerOAuth);
 router.get('/oauth/pending', getPendingOAuth);
 router.post('/login',    login);
 router.get('/me',        authenticate, getMe);
+router.get('/wallet-key', authenticate, getWalletKey);
 router.post('/logout',   authenticate, logout);
 
 // 2FA routes
@@ -27,6 +28,17 @@ router.post('/2fa/verify',  verify2FA);
 router.post('/2fa/disable', authenticate, disable2FA);
 
 const issueOAuthLogin = async (res, user) => {
+    const base = `${frontendUrl()}/login`;
+
+    if (user.two_fa_enabled) {
+        const tempToken = jwt.sign(
+            { userId: user.id, pending2FA: true },
+            process.env.JWT_SECRET,
+            { expiresIn: '5m' }
+        );
+        return res.redirect(`${base}?requires2FA=1&tempToken=${encodeURIComponent(tempToken)}`);
+    }
+
     const token = jwt.sign(
         { userId: user.id, role: user.role },
         process.env.JWT_SECRET,
@@ -36,7 +48,7 @@ const issueOAuthLogin = async (res, user) => {
         'INSERT INTO audit_logs (id, user_id, action) VALUES ($1, $2, $3)',
         [uuidv4(), user.id, 'OAUTH_LOGIN']
     );
-    res.redirect(`${frontendUrl()}/login?token=${token}&role=${user.role}`);
+    res.redirect(`${base}?token=${token}&role=${user.role}`);
 };
 
 const oauthLoginCallback = async (res, oauthProfile) => {

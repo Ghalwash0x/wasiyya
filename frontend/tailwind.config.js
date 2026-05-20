@@ -5,6 +5,11 @@ export default {
         extend: {
             fontFamily: {
                 arabic: ['Cairo', 'Tajawal', 'sans-serif']
+            },
+            colors: {
+                slate: {
+                    850: '#1a2235',
+                }
             }
         }
     },

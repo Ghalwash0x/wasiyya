@@ -86,9 +86,9 @@ const MyWill = () => {
     return (
         <div className="flex min-h-screen bg-gray-50">
             <Sidebar />
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 min-w-0 flex flex-col">
                 <Navbar title="وصيّتي" />
-                <main className="flex-1 p-6 max-w-2xl">
+                <main className="flex-1 p-4 lg:p-6 max-w-2xl">
 
                     {isMinutes && (
                         <div className="mb-4 px-4 py-2.5 bg-purple-50 border border-purple-200 rounded-lg text-sm text-purple-700 flex items-center gap-2">

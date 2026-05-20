@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { AlertTriangle, Bell, HeartPulse, Loader2 } from 'lucide-react';
 
 const CheckinBanner = () => {
     const { user } = useAuth();
@@ -21,7 +22,6 @@ const CheckinBanner = () => {
         return () => clearInterval(interval);
     }, [fetchStatus, user]);
 
-    // Admin doesn't have a dead man's switch
     if (!user || user.role === 'admin') return null;
     if (!status) return null;
 
@@ -38,25 +38,36 @@ const CheckinBanner = () => {
         setChecking(false);
     };
 
+    const isOverdue = status.is_overdue;
+
     return (
-        <div className={`px-4 py-2.5 text-center text-sm font-medium flex items-center justify-center gap-3 flex-wrap
-            ${status.is_overdue
-                ? 'bg-red-100 text-red-800 border-b border-red-200'
-                : 'bg-amber-50 text-amber-800 border-b border-amber-200'}`}>
-            <span>
-                {status.is_overdue
-                    ? `⚠️ لم تجدد وجودك منذ ${status.elapsed} ${unit} — الوصية قد تُفعَّل قريباً!`
-                    : `🔔 تذكير: متبقي ${status.days_remaining} ${unit} على تجديد وجودك`}
-            </span>
+        <div className={`px-5 py-2.5 flex items-center justify-between gap-3 text-sm font-medium border-b ${
+            isOverdue
+                ? 'bg-red-50 text-red-800 border-red-200'
+                : 'bg-amber-50 text-amber-800 border-amber-200'
+        }`}>
+            <div className="flex items-center gap-2">
+                {isOverdue
+                    ? <AlertTriangle size={15} className="text-red-600 shrink-0" />
+                    : <Bell size={15} className="text-amber-600 shrink-0" />}
+                <span>
+                    {isOverdue
+                        ? `لم تجدد وجودك منذ ${status.elapsed} ${unit} — الوصية قد تُفعَّل قريباً!`
+                        : `تذكير: متبقي ${status.days_remaining} ${unit} على تجديد وجودك`}
+                </span>
+            </div>
             <button
                 onClick={handleCheckin}
                 disabled={checking}
-                className={`px-3 py-1 rounded-md text-xs font-semibold border transition-colors
-                    ${status.is_overdue
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border transition-all shrink-0 ${
+                    isOverdue
                         ? 'bg-red-600 text-white border-red-600 hover:bg-red-700'
-                        : 'bg-white text-amber-800 border-amber-400 hover:bg-amber-50'}`}
+                        : 'bg-white text-amber-800 border-amber-300 hover:bg-amber-50'
+                }`}
             >
-                {checking ? '...' : 'أنا بخير ✓'}
+                {checking
+                    ? <><Loader2 size={11} className="animate-spin" /> جاري...</>
+                    : <><HeartPulse size={11} /> أنا بخير</>}
             </button>
         </div>
     );
