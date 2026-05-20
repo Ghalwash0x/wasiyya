@@ -662,6 +662,46 @@ Navigate to **http://localhost:3000**
 ✅ MySQL connected — wasiyya
 ```
 
+### HTTPS (local development)
+
+1. Install [mkcert](https://github.com/FiloSottile/mkcert) and trust the local CA (once — asks for Mac password):
+
+```bash
+brew install mkcert
+cd backend && npm run ssl:trust
+```
+
+2. Generate the app certificate (once):
+
+```bash
+cd backend && npm run ssl:generate
+```
+
+3. In `backend/.env`, enable HTTPS and use `https://` URLs:
+
+```env
+USE_HTTPS=true
+FRONTEND_URL=https://localhost:3000
+BACKEND_URL=https://localhost:3001
+WEBAUTHN_ORIGIN=https://localhost:3000
+```
+
+4. Update OAuth apps (Google Cloud + GitHub) callback URLs to:
+
+- `https://localhost:3001/api/auth/google/callback`
+- `https://localhost:3001/api/auth/github/callback`
+
+5. Run backend and frontend (Vite picks up the same certs automatically):
+
+```bash
+cd backend && npm run dev
+cd frontend && npm run dev
+```
+
+Open **https://localhost:3000**. Accept the browser warning for the self-signed cert (or install the cert with [mkcert](https://github.com/FiloSottile/mkcert)).
+
+Backend listens on **https://localhost:3001**; plain HTTP on port **3080** redirects to HTTPS.
+
 ---
 
 ## ⚙️ Configuration
@@ -727,7 +767,8 @@ UPLOAD_PATH=./uploads
 # ─── Dead Man's Switch ───────────────────────────────────────
 TIME_UNIT=minutes           # 'minutes' = testing mode | 'days' = production
 
-# ─── SSL (optional) ──────────────────────────────────────────
+# ─── HTTPS (optional) ────────────────────────────────────────
+USE_HTTPS=true              # or omit; auto-on when server.cert + server.key exist
 SSL_CERT_PATH=./certs/server.cert
 SSL_KEY_PATH=./certs/server.key
 ```
@@ -749,7 +790,8 @@ SSL_KEY_PATH=./certs/server.key
 | `GOOGLE_CLIENT_ID/SECRET` | No | — | Placeholder = Google disabled |
 | `GITHUB_CLIENT_ID/SECRET` | No | — | Placeholder = GitHub disabled |
 | `TIME_UNIT` | No | `days` | `minutes` testing / `days` production |
-| `SSL_CERT_PATH` / `SSL_KEY_PATH` | No | `./certs/…` | Enables HTTPS when both exist |
+| `USE_HTTPS` | No | — | Force HTTPS when `true` (needs certs) |
+| `SSL_CERT_PATH` / `SSL_KEY_PATH` | No | `./certs/…` | TLS cert/key (`npm run ssl:generate`) |
 
 ---
 

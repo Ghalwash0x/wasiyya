@@ -3,7 +3,12 @@
   "version": "1.0.0",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "nodemon src/app.js"
+    "dev": "nodemon src/app.js",
+    "ssl:generate": "node scripts/generate-ssl.js",
+    "ssl:generate:force": "node scripts/generate-ssl.js -- --force",
+    "ssl:openssl": "bash scripts/generate-ssl-openssl.sh",
+    "ssl:trust": "bash scripts/install-mkcert-ca.sh",
+    "dev:https": "npm run ssl:generate && nodemon src/app.js"
   },
   "dependencies": {
     "@simplewebauthn/server": "^11.0.0",

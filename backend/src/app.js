@@ -1,13 +1,15 @@
 const express   = require('express');
 const https     = require('https');
 const http      = require('http');
-const fs        = require('fs');
 const helmet    = require('helmet');
 const cors      = require('cors');
 const rateLimit = require('express-rate-limit');
 const session   = require('express-session');
 const passport  = require('./middleware/passport');
 require('dotenv').config();
+
+const fs = require('fs');
+const path = require('path');
 
 const authRoutes        = require('./routes/auth.routes');
 const willRoutes        = require('./routes/will.routes');
@@ -23,10 +25,19 @@ const { startCheckinCron } = require('./services/checkin.service');
 
 const app = express();
 
-app.use(helmet());
+const certPath  = process.env.SSL_CERT_PATH || './certs/server.cert';
+const keyPath   = process.env.SSL_KEY_PATH  || './certs/server.key';
+const sslEnabled = process.env.USE_HTTPS === 'true'
+    || (fs.existsSync(path.resolve(certPath)) && fs.existsSync(path.resolve(keyPath)));
+
+if (sslEnabled) {
+    app.set('trust proxy', 1);
+}
+
+app.use(helmet({ hsts: sslEnabled }));
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true
+    origin: process.env.FRONTEND_URL || (sslEnabled ? 'https://localhost:3000' : 'http://localhost:3000'),
+    credentials: true,
 }));
 
 // Global limiter — all routes
@@ -57,7 +68,11 @@ app.use(session({
     secret: process.env.SESSION_SECRET || process.env.JWT_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: process.env.NODE_ENV === 'production', maxAge: 5 * 60 * 1000 }
+    cookie: {
+        secure: sslEnabled || process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 5 * 60 * 1000,
+    },
 }));
 app.use(passport.initialize());
 app.use(passport.session());
@@ -96,22 +111,31 @@ startCheckinCron();
 
 const PORT      = process.env.PORT || 3001;
 const HTTP_PORT = process.env.HTTP_PORT || 3080;
-const certPath  = process.env.SSL_CERT_PATH || './certs/server.cert';
-const keyPath   = process.env.SSL_KEY_PATH  || './certs/server.key';
 
-if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-    // HTTPS server
-    https.createServer({ key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) }, app)
-        .listen(PORT, () => console.log(`🔐 HTTPS — https://localhost:${PORT}`));
+if (sslEnabled) {
+    const tlsOptions = {
+        key: fs.readFileSync(path.resolve(keyPath)),
+        cert: fs.readFileSync(path.resolve(certPath)),
+    };
 
-    // HTTP → HTTPS redirect
+    https.createServer(tlsOptions, app).listen(PORT, () => {
+        console.log(`🔐 Wasiyya HTTPS — https://localhost:${PORT}`);
+        console.log(`⏱️  TIME_UNIT = ${process.env.TIME_UNIT || 'days'}`);
+        console.log(`   FRONTEND_URL should be https://localhost:3000`);
+    });
+
     http.createServer((req, res) => {
-        res.writeHead(301, { Location: `https://${req.headers.host.replace(/:\d+/, `:${PORT}`)}${req.url}` });
+        const host = (req.headers.host || `localhost:${PORT}`).split(':')[0];
+        const location = `https://${host}:${PORT}${req.url}`;
+        res.writeHead(301, { Location: location });
         res.end();
-    }).listen(HTTP_PORT, () => console.log(`↪️  HTTP redirect — http://localhost:${HTTP_PORT} → HTTPS`));
+    }).listen(HTTP_PORT, () => {
+        console.log(`↪️  HTTP redirect http://localhost:${HTTP_PORT} → https://localhost:${PORT}`);
+    });
 } else {
     app.listen(PORT, () => {
         console.log(`🚀 Wasiyya backend — http://localhost:${PORT}`);
         console.log(`⏱️  TIME_UNIT = ${process.env.TIME_UNIT || 'days'}`);
+        console.log(`💡 HTTPS: run "npm run ssl:generate" then set USE_HTTPS=true in .env`);
     });
 }
