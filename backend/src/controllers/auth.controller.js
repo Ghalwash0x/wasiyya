@@ -4,6 +4,7 @@ const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 const { getUserKeyHex } = require('../services/encryption.service');
+const { get2FAMethods } = require('../services/passkey.service');
 
 const BCRYPT_ROUNDS = 12;
 
@@ -156,7 +157,8 @@ const login = async (req, res) => {
                 process.env.JWT_SECRET,
                 { expiresIn: '5m' }
             );
-            return res.json({ success: true, requires2FA: true, tempToken });
+            const methods = await get2FAMethods(user.id);
+            return res.json({ success: true, requires2FA: true, tempToken, methods });
         }
 
         const token = jwt.sign(
@@ -181,10 +183,25 @@ const login = async (req, res) => {
 const getMe = async (req, res) => {
     try {
         const result = await pool.query(
-            'SELECT id, full_name, email, role, two_fa_enabled, last_checkin, created_at FROM users WHERE id = $1',
+            'SELECT id, full_name, email, role, two_fa_enabled, two_fa_secret, last_checkin, created_at FROM users WHERE id = $1',
             [req.user.id]
         );
-        res.json({ success: true, data: result.rows[0] });
+        const user = result.rows[0];
+        const methods = await get2FAMethods(req.user.id);
+        res.json({
+            success: true,
+            data: {
+                id: user.id,
+                full_name: user.full_name,
+                email: user.email,
+                role: user.role,
+                two_fa_enabled: user.two_fa_enabled,
+                two_fa_totp: !!user.two_fa_secret,
+                two_fa_passkey: methods.passkey,
+                last_checkin: user.last_checkin,
+                created_at: user.created_at,
+            },
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
     }

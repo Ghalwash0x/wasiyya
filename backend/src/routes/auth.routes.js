@@ -9,6 +9,8 @@ const {
     getPendingOAuth, registerOAuth, getWalletKey,
 } = require('../controllers/auth.controller');
 const { setup2FA, enable2FA, verify2FA, disable2FA } = require('../controllers/twofa.controller');
+const passkey = require('../controllers/passkey.controller');
+const { get2FAMethods } = require('../services/passkey.service');
 const { authenticate } = require('../middleware/auth.middleware');
 
 const frontendUrl = () => process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -26,6 +28,16 @@ router.get('/2fa/setup',    authenticate, setup2FA);
 router.post('/2fa/enable',  authenticate, enable2FA);
 router.post('/2fa/verify',  verify2FA);
 router.post('/2fa/disable', authenticate, disable2FA);
+router.get('/2fa/methods', passkey.getMethodsForLogin);
+
+// Passkey (WebAuthn) 2FA
+router.get('/passkey/register-options', authenticate, passkey.registerOptions);
+router.post('/passkey/register-verify', authenticate, passkey.registerVerify);
+router.get('/passkey/list', authenticate, passkey.listPasskeys);
+router.delete('/passkey/:id', authenticate, passkey.deletePasskey);
+router.get('/passkey/action-options', authenticate, passkey.actionOptions);
+router.post('/passkey/login-options', passkey.loginOptions);
+router.post('/passkey/login-verify', passkey.loginVerify);
 
 const issueOAuthLogin = async (res, user) => {
     const base = `${frontendUrl()}/login`;
@@ -36,7 +48,14 @@ const issueOAuthLogin = async (res, user) => {
             process.env.JWT_SECRET,
             { expiresIn: '5m' }
         );
-        return res.redirect(`${base}?requires2FA=1&tempToken=${encodeURIComponent(tempToken)}`);
+        const methods = await get2FAMethods(user.id);
+        const q = new URLSearchParams({
+            requires2FA: '1',
+            tempToken,
+            totp: methods.totp ? '1' : '0',
+            passkey: methods.passkey ? '1' : '0',
+        });
+        return res.redirect(`${base}?${q.toString()}`);
     }
 
     const token = jwt.sign(
@@ -99,11 +118,13 @@ const handleOAuthCallback = (provider) => (req, res, next) => {
         try {
             const mode = req.query.state === 'register' ? 'register' : 'login';
             if (mode === 'register') {
-                return oauthRegisterCallback(res, oauthProfile);
+                return await oauthRegisterCallback(res, oauthProfile);
             }
-            return oauthLoginCallback(res, oauthProfile);
-        } catch {
-            return res.redirect(`${frontendUrl()}/login?error=oauth_failed`);
+            return await oauthLoginCallback(res, oauthProfile);
+        } catch (e) {
+            console.error(`OAuth callback (${provider}):`, e.message || e);
+            const page = req.query.state === 'register' ? 'register' : 'login';
+            return res.redirect(`${frontendUrl()}/${page}?error=oauth_failed`);
         }
     })(req, res, next);
 };
@@ -117,8 +138,26 @@ const requireOAuth = (provider) => (req, res, next) => {
 
 const startOAuth = (provider) => (req, res, next) => {
     const mode = req.query.mode === 'register' ? 'register' : 'login';
+    const page = mode === 'register' ? 'register' : 'login';
     const scope = provider === 'google' ? ['profile', 'email'] : ['user:email'];
-    passport.authenticate(provider, { scope, session: false, state: mode })(req, res, next);
+
+    passport.authenticate(provider, { scope, session: true, state: mode })(req, res, (err) => {
+        if (err) {
+            console.error(`OAuth start (${provider}):`, err.message || err);
+            return res.redirect(`${frontendUrl()}/${page}?error=oauth_failed`);
+        }
+        if (res.headersSent) return;
+        next(err);
+    });
+};
+
+const handleOAuthRouteError = (err, req, res, next) => {
+    console.error('OAuth route error:', err.message || err);
+    if (res.headersSent) return next(err);
+    const page = (req.query?.state === 'register' || req.originalUrl?.includes('register'))
+        ? 'register'
+        : 'login';
+    res.redirect(`${frontendUrl()}/${page}?error=oauth_failed`);
 };
 
 router.get('/google', requireOAuth('google'), startOAuth('google'));
@@ -126,5 +165,7 @@ router.get('/google/callback', requireOAuth('google'), handleOAuthCallback('goog
 
 router.get('/github', requireOAuth('github'), startOAuth('github'));
 router.get('/github/callback', requireOAuth('github'), handleOAuthCallback('github'));
+
+router.use(handleOAuthRouteError);
 
 module.exports = router;

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
-import { Mail, Lock, LogIn, ShieldCheck, ArrowRight, AlertCircle, X, Loader2 } from 'lucide-react';
+import { Mail, Lock, LogIn, ShieldCheck, ArrowRight, AlertCircle, X, Loader2, KeyRound } from 'lucide-react';
+import { isPasskeySupported, loginWithPasskey } from '../utils/passkeyClient';
 
 const Login = () => {
     const [form,      setForm]      = useState({ email: '', password: '' });
@@ -11,6 +12,8 @@ const Login = () => {
     const [otpCode,   setOtpCode]   = useState('');
     const [error,     setError]     = useState('');
     const [loading,   setLoading]   = useState(false);
+    const [methods,   setMethods]   = useState({ totp: true, passkey: false });
+    const [passkeyOk, setPasskeyOk] = useState(false);
     const { login }   = useAuth();
     const navigate    = useNavigate();
 
@@ -19,6 +22,10 @@ const Login = () => {
         const t = setTimeout(() => setError(''), 10000);
         return () => clearTimeout(t);
     }, [error]);
+
+    useEffect(() => {
+        isPasskeySupported().then(setPasskeyOk).catch(() => setPasskeyOk(false));
+    }, []);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -39,8 +46,17 @@ const Login = () => {
 
         if (needs2FA && oauthTempToken) {
             setTempToken(oauthTempToken);
+            setMethods({
+                totp: params.get('totp') === '1',
+                passkey: params.get('passkey') === '1',
+            });
             setStep('2fa');
             window.history.replaceState({}, '', '/login');
+            if (params.get('totp') === null && params.get('passkey') === null) {
+                api.get('/auth/2fa/methods', { params: { tempToken: oauthTempToken } })
+                    .then(r => setMethods(r.data.data))
+                    .catch(() => {});
+            }
             return;
         }
 
@@ -68,6 +84,7 @@ const Login = () => {
             const res = await api.post('/auth/login', { email: form.email, password: form.password });
             if (res.data.requires2FA) {
                 setTempToken(res.data.tempToken);
+                setMethods(res.data.methods || { totp: true, passkey: false });
                 setStep('2fa');
             } else {
                 const { user, token } = res.data.data;
@@ -91,7 +108,17 @@ const Login = () => {
         setError(''); setLoading(true);
         try {
             const res = await api.post('/auth/2fa/verify', { tempToken, code: otpCode });
-            const { user, token } = res.data.data;
+            finishLogin(res.data.data.user, res.data.data.token);
+        } catch (err) {
+            setError(err.response?.data?.message || 'كود التحقق غير صحيح');
+        }
+        setLoading(false);
+    };
+
+    const handlePasskeyLogin = async () => {
+        setError(''); setLoading(true);
+        try {
+            const { user, token } = await loginWithPasskey(tempToken);
             localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify(user));
             const dest = user.role === 'developer' ? '/developer'
@@ -101,9 +128,22 @@ const Login = () => {
             navigate(dest);
             window.location.reload();
         } catch (err) {
-            setError(err.response?.data?.message || 'كود التحقق غير صحيح');
+            const text = err.response?.data?.message
+                || (err.name === 'NotAllowedError' ? 'تم إلغاء Passkey' : 'فشل التحقق بـ Passkey');
+            setError(text);
         }
         setLoading(false);
+    };
+
+    const finishLogin = (user, token) => {
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+        const dest = user.role === 'developer' ? '/developer'
+                   : user.role === 'admin'     ? '/admin'
+                   : user.role === 'manager'   ? '/manager'
+                   : '/dashboard';
+        navigate(dest);
+        window.location.reload();
     };
 
     return (
@@ -227,7 +267,13 @@ const Login = () => {
                                         <ShieldCheck size={30} className="text-indigo-400" />
                                     </div>
                                     <h2 className="text-lg font-bold text-white">التحقق الثنائي</h2>
-                                    <p className="text-sm text-slate-400 mt-1">أدخل الكود من تطبيق المصادقة</p>
+                                    <p className="text-sm text-slate-400 mt-1">
+                                        {methods.passkey && methods.totp
+                                            ? 'Passkey أو كود التطبيق'
+                                            : methods.passkey
+                                                ? 'استخدم Passkey'
+                                                : 'أدخل الكود من تطبيق المصادقة'}
+                                    </p>
                                 </div>
 
                                 {error && (
@@ -242,28 +288,52 @@ const Login = () => {
                                     </div>
                                 )}
 
-                                <form onSubmit={handle2FA} className="space-y-4">
-                                    <input
-                                        type="text"
-                                        inputMode="numeric"
-                                        maxLength={6}
-                                        className="input-dark text-center text-3xl tracking-widest"
-                                        placeholder="000000"
-                                        value={otpCode}
-                                        onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                                        autoFocus
-                                        required
-                                    />
+                                {methods.passkey && passkeyOk && (
                                     <button
-                                        type="submit"
-                                        disabled={loading || otpCode.length !== 6}
-                                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-3 text-sm font-semibold transition-all disabled:opacity-60 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25"
+                                        type="button"
+                                        onClick={handlePasskeyLogin}
+                                        disabled={loading}
+                                        className="w-full mb-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-3 text-sm font-semibold transition-all disabled:opacity-60 flex items-center justify-center gap-2"
                                     >
                                         {loading
                                             ? <><Loader2 size={16} className="animate-spin" /> جاري التحقق...</>
-                                            : <><ShieldCheck size={16} /> تأكيد</>}
+                                            : <><KeyRound size={16} /> الدخول بـ Passkey</>}
                                     </button>
-                                </form>
+                                )}
+
+                                {methods.totp && methods.passkey && passkeyOk && (
+                                    <div className="relative my-4">
+                                        <div className="absolute inset-0 flex items-center">
+                                            <div className="w-full border-t border-white/10" />
+                                        </div>
+                                        <div className="relative flex justify-center text-xs text-slate-500 bg-transparent px-3">أو</div>
+                                    </div>
+                                )}
+
+                                {methods.totp && (
+                                    <form onSubmit={handle2FA} className="space-y-4">
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            maxLength={6}
+                                            className="input-dark text-center text-3xl tracking-widest"
+                                            placeholder="000000"
+                                            value={otpCode}
+                                            onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                                            autoFocus={!methods.passkey}
+                                            required={!methods.passkey}
+                                        />
+                                        <button
+                                            type="submit"
+                                            disabled={loading || otpCode.length !== 6}
+                                            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-3 text-sm font-semibold transition-all disabled:opacity-60 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25"
+                                        >
+                                            {loading
+                                                ? <><Loader2 size={16} className="animate-spin" /> جاري التحقق...</>
+                                                : <><ShieldCheck size={16} /> تأكيد بـ TOTP</>}
+                                        </button>
+                                    </form>
+                                )}
 
                                 <button
                                     onClick={() => { setStep('login'); setError(''); setOtpCode(''); }}
