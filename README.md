@@ -26,7 +26,7 @@
 
 <p>
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/version-3.0.0-indigo?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/version-4.0.0-indigo?style=flat-square" alt="Version" />
   <img src="https://img.shields.io/badge/University%20Project-2026-orange?style=flat-square" alt="University" />
 </p>
 
@@ -82,8 +82,8 @@
 | Role | Description |
 |------|-------------|
 | `user` — موصي | Creates and manages their own will, assets, documents, and trustees. Subject to the Dead Man's Switch. |
-| `admin` — مدير النظام | Manages the platform via a dedicated admin panel. Never participates in the will flow. |
-| `manager` — مدير | Reserved for future use (e.g., legal oversight). Currently treated as a regular user. |
+| `admin` — مدير النظام | Manages the platform: users, roles, audit logs, system stats. Never accesses will content or decrypted data (Zero-Trust). |
+| `manager` — مراجع وثائق | Reviews and verifies document integrity across all users. Can run SHA-256 + RSA signature checks. Cannot download or read document content. |
 
 ---
 
@@ -99,7 +99,8 @@
 - Passwords hashed with **bcrypt** (cost factor 12); legacy plaintext auto-migrated on first login
 - JWT-based sessions (24-hour expiry)
 - **Two-Factor Authentication (TOTP)** — compatible with Google Authenticator and Authy
-- **OAuth login** — Sign in with Google or GitHub (no password required)
+- **OAuth login** — Sign in with Google or GitHub (existing accounts only — no auto-registration)
+- **OAuth sign-up** — Register via Google or GitHub from the `/register` page; new emails are redirected to `/register?oauth_token=…` for name and optional password, then linked to the provider
 
 </details>
 
@@ -125,6 +126,8 @@ Store structured records with the following types:
 | `password` | Passwords and PINs |
 | `info` | General important information |
 | `note` | Personal messages or instructions |
+
+All asset content is **AES-256-GCM encrypted** using a per-user key before storage. The browser decrypts using the Web Crypto API — plaintext is never sent over the API. Assets created before encryption was introduced (`iv = NULL`) are displayed as legacy plaintext until re-saved.
 
 </details>
 
@@ -209,6 +212,7 @@ See the [Admin Panel](#-admin-panel) section for full details.
 | axios | ^1.6.0 | HTTP client with interceptors |
 | Vite | ^5.0.0 | Build tool and dev server |
 | Tailwind CSS | ^3.3.0 | Utility-first CSS framework |
+| lucide-react | ^0.x | Icon library (sidebar, nav, buttons) |
 
 ### Infrastructure
 
@@ -289,14 +293,15 @@ wasiyya/
 │   │   │   └── multer.js              # File upload config (types, size limits)
 │   │   │
 │   │   ├── controllers/
-│   │   │   ├── auth.controller.js     # register, login (bcrypt + 2FA), getMe, logout
+│   │   │   ├── auth.controller.js     # register, login (bcrypt + 2FA), getMe, logout, getWalletKey
 │   │   │   ├── twofa.controller.js    # 2FA setup, enable, verify, disable (TOTP)
 │   │   │   ├── will.controller.js     # CRUD — wills
-│   │   │   ├── asset.controller.js    # CRUD — assets
+│   │   │   ├── asset.controller.js    # CRUD — assets (AES-256-GCM encrypt on write)
 │   │   │   ├── document.controller.js # upload (encrypt + sign), download (decrypt), verify
 │   │   │   ├── beneficiary.controller.js  # CRUD — trustees + public token access
 │   │   │   ├── checkin.controller.js  # check-in submit + status
-│   │   │   └── admin.controller.js    # all admin operations
+│   │   │   ├── admin.controller.js    # user management, audit logs, stats, test tools
+│   │   │   └── manager.controller.js  # document metadata listing + integrity verification
 │   │   │
 │   │   ├── middleware/
 │   │   │   ├── auth.middleware.js     # JWT verification → req.user
@@ -305,13 +310,14 @@ wasiyya/
 │   │   │   └── validate.middleware.js # express-validator error handler
 │   │   │
 │   │   ├── routes/
-│   │   │   ├── auth.routes.js         # /login, /register, /2fa/*, /google, /github
+│   │   │   ├── auth.routes.js         # /login, /register, /2fa/*, /google, /github, /register/oauth
 │   │   │   ├── will.routes.js
 │   │   │   ├── asset.routes.js
 │   │   │   ├── document.routes.js
 │   │   │   ├── beneficiary.routes.js
 │   │   │   ├── checkin.routes.js
-│   │   │   └── admin.routes.js
+│   │   │   ├── admin.routes.js
+│   │   │   └── manager.routes.js      # /manager/documents, /manager/documents/:id/verify, /manager/stats
 │   │   │
 │   │   ├── services/
 │   │   │   ├── checkin.service.js     # Dead Man's Switch cron + trigger logic
@@ -330,29 +336,37 @@ wasiyya/
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/
-│   │   │   ├── Login.jsx              # Login form + 2FA step + OAuth redirect handler
-│   │   │   ├── Register.jsx           # Registration form + OAuth buttons
-│   │   │   ├── Dashboard.jsx          # Check-in status + will overview
+│   │   │   ├── Login.jsx              # Login form + 2FA step + OAuth redirect handler (auto-dismiss errors)
+│   │   │   ├── Register.jsx           # Registration form + OAuth buttons + profile completion step
+│   │   │   ├── Dashboard.jsx          # Stats cards + check-in progress bar + will overview
 │   │   │   ├── MyWill.jsx             # Will creation and settings
-│   │   │   ├── Assets.jsx             # Asset management
+│   │   │   ├── Assets.jsx             # Asset management (AES-256-GCM in-browser decrypt)
 │   │   │   ├── Documents.jsx          # Upload / download / delete + integrity verify modal
 │   │   │   ├── Beneficiaries.jsx      # Trustee management
 │   │   │   ├── Verification.jsx       # Manual check-in page
 │   │   │   ├── TwoFactorSetup.jsx     # 2FA enable / disable + QR code setup
-│   │   │   ├── AdminPanel.jsx         # Admin panel (5 tabs)
-│   │   │   └── BeneficiaryAccess.jsx  # Public trustee access page (no login)
+│   │   │   ├── AdminPanel.jsx         # Admin panel (5 tabs — metadata only, no will content)
+│   │   │   ├── ManagerPanel.jsx       # Document review panel (verify integrity, no download)
+│   │   │   ├── AccessDenied.jsx       # 403 — unauthorized role redirect page
+│   │   │   ├── NotFound.jsx           # 404 — page not found
+│   │   │   └── BeneficiaryAccess.jsx  # Public trustee access page (no login required)
 │   │   │
 │   │   ├── components/
-│   │   │   ├── Sidebar.jsx            # Role-aware navigation sidebar
+│   │   │   ├── Sidebar.jsx            # Role-aware navigation (4 roles, mobile-responsive, lucide icons)
+│   │   │   ├── Navbar.jsx             # Top bar with hamburger toggle for mobile sidebar
 │   │   │   ├── CheckinBanner.jsx      # Overdue warning banner (polls every 30s)
 │   │   │   ├── ProtectedRoute.jsx     # Redirects unauthenticated users to /login
-│   │   │   └── RoleRoute.jsx          # Redirects wrong-role users
+│   │   │   └── RoleRoute.jsx          # Shows AccessDenied for wrong-role access
 │   │   │
 │   │   ├── context/
-│   │   │   └── AuthContext.jsx        # JWT storage, user state, login/logout
+│   │   │   ├── AuthContext.jsx        # JWT storage, user state, login/logout, registerOAuth()
+│   │   │   └── SidebarContext.jsx     # Mobile sidebar open/close state + overlay
 │   │   │
 │   │   ├── services/
 │   │   │   └── api.js                 # Axios instance — baseURL + auth header interceptor
+│   │   │
+│   │   ├── utils/
+│   │   │   └── assetCrypto.js         # Web Crypto API — AES-256-GCM decrypt in browser
 │   │   │
 │   │   ├── App.jsx                    # Router setup + SmartRedirect
 │   │   └── main.jsx                   # React DOM entry
@@ -442,7 +456,7 @@ CREATE TABLE assets (
     asset_type  ENUM('account','bank','password','info','note') NOT NULL,
     title       VARCHAR(255) NOT NULL,
     content     TEXT         NOT NULL,
-    iv          VARCHAR(255) DEFAULT NULL,   -- reserved for future asset encryption
+    iv          VARCHAR(255) DEFAULT NULL,   -- AES-256-GCM ivHex:authTagHex (NULL = legacy plaintext)
     created_at  DATETIME    DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (will_id) REFERENCES wills(id) ON DELETE CASCADE
@@ -789,19 +803,25 @@ When `requires2FA: true`, proceed to `POST /auth/2fa/verify` with the `tempToken
 
 #### OAuth Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/auth/google` | Redirect to Google consent screen |
-| `GET` | `/auth/github` | Redirect to GitHub authorization |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/auth/google` | — | Redirect to Google consent screen |
+| `GET` | `/auth/github` | — | Redirect to GitHub authorization |
+| `GET` | `/auth/oauth/pending?token=` | — | Fetch name + email stored from OAuth provider |
+| `POST` | `/auth/register/oauth` | — | Complete new-account creation; links `oauth_provider` + `oauth_id` |
 
-On success: redirects to `FRONTEND_URL/login?token=<jwt>&role=<role>`  
-On failure: redirects to `FRONTEND_URL/login?error=1`
+**Sign-in (existing account):** redirects to `FRONTEND_URL/login?token=<jwt>&role=<role>`  
+**Sign-in with 2FA:** redirects to `FRONTEND_URL/login?requires2FA=1&tempToken=<tempToken>` — Login.jsx catches this and shows the OTP screen  
+**Sign-up from `/register` (`?mode=register`):** new email → redirects to `FRONTEND_URL/register?oauth_token=<token>` for profile completion; existing email → `FRONTEND_URL/login?error=account_not_found`  
+**Sign-in with unknown email:** redirects to `FRONTEND_URL/login?error=account_not_found`  
+**Provider not configured:** redirects to `FRONTEND_URL/login?error=oauth_not_configured`
 
 ---
 
-#### `GET /auth/me` · `POST /auth/logout`
+#### `GET /auth/me` · `POST /auth/logout` · `GET /auth/wallet-key`
 
-Standard profile fetch and logout (both require JWT).
+Standard profile fetch and logout (both require JWT).  
+`GET /auth/wallet-key` returns the per-user AES-256-GCM decryption key derived as `HMAC-SHA256(AES_SECRET_KEY, userId)` — requires `role: user`. The browser passes this key to the Web Crypto API to decrypt asset content locally; the plaintext is never transmitted over the API.
 
 ---
 
@@ -832,8 +852,8 @@ Standard profile fetch and logout (both require JWT).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/assets/:willId` | List all assets |
-| `POST` | `/assets` | Add an asset |
+| `GET` | `/assets/:willId` | List all assets (returns `content_encrypted` + `iv`; no plaintext) |
+| `POST` | `/assets` | Add an asset (content is AES-256-GCM encrypted server-side before storage) |
 | `DELETE` | `/assets/:id` | Delete an asset |
 
 ```json
@@ -845,6 +865,8 @@ Standard profile fetch and logout (both require JWT).
   "content": "Account: 1234567890\nIBAN: GB12HSBC..."
 }
 ```
+
+Asset content is encrypted with AES-256-GCM using a per-user key: `HMAC-SHA256(AES_SECRET_KEY, userId)`. The API returns `content` (Base64 ciphertext) and `iv` (`ivHex:authTagHex`). The browser fetches the key from `GET /auth/wallet-key` and decrypts locally via the Web Crypto API — plaintext never leaves the device. Assets without an `iv` (`null`) were created before encryption was introduced; they display as-is until the user re-saves them.
 
 **Asset types:** `account` · `bank` · `password` · `info` · `note`
 
@@ -946,6 +968,32 @@ Error codes: `403` token expired or will not triggered · `404` token not found
 
 ---
 
+### 🔍 Manager — `/api/manager`
+
+> All endpoints require `role: manager`. Managers see document metadata across all users and can verify integrity. **No download, no decrypted content, no stored paths are ever returned.**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/manager/stats` | Aggregate document + will stats |
+| `GET` | `/manager/documents` | All documents with owner, will, hash, and signature — never `stored_path` or `iv` |
+| `POST` | `/manager/documents/:id/verify` | Decrypt in-memory → re-hash → compare; returns verdict only |
+
+```json
+// POST /manager/documents/:id/verify — response
+{
+  "intact": true,
+  "hash_match": true,
+  "signature_valid": true,
+  "stored_hash": "a3f1c9...",
+  "current_hash": "a3f1c9...",
+  "message": "✅ الملف سليم والتوقيع صحيح"
+}
+```
+
+Every verification is recorded in `audit_logs` as `MANAGER_VERIFY_DOC`.
+
+---
+
 ### 🏥 Health — `GET /api/health`
 
 ```json
@@ -963,13 +1011,17 @@ Error codes: `403` token expired or will not triggered · `404` token not found
 | **Password Hashing** | bcrypt cost-12; plaintext passwords auto-migrated on first login |
 | **JWT Authentication** | HS256, 24h expiry, verified on every request |
 | **Two-Factor Auth (TOTP)** | speakeasy — compatible with Google Authenticator and Authy |
-| **OAuth (Google + GitHub)** | Passport strategies; find-or-create by `oauth_id` or email match |
+| **OAuth (Google + GitHub)** | Passport strategies; find-only — no auto-registration. Login matches by `oauth_id` or email. Sign-up uses a separate profile-completion flow from `/register`. |
+| **Asset Content Encryption** | AES-256-GCM; per-user key (`HMAC-SHA256(AES_SECRET_KEY, userId)`); decrypted in-browser via Web Crypto API |
 | **Document Encryption** | AES-256-GCM at rest; transparent decryption on download |
 | **Document Integrity** | SHA-256 hash stored at upload (`documents.sha256_hash`) |
 | **Digital Signatures** | RSA-2048 auto-generated key pair; each document signed at upload |
 | **Integrity Verification** | `/verify` endpoint + UI modal confirms hash match + signature |
 | **HTTPS** | Automatic when SSL certs exist; HTTP→HTTPS redirect on `HTTP_PORT` |
-| **RBAC** | Role enforced after JWT verification; admins blocked from will routes |
+| **RBAC** | Role enforced after JWT verification; strict per-route role lists |
+| **Zero-Trust Admin** | Admin sees only metadata (names, dates, counts). Will content (`description`), asset content, decrypted files, and beneficiary tokens are never returned to admin endpoints. |
+| **Manager Read-Only** | Manager can verify document integrity (decrypt in-memory, return verdict). `stored_path`, `iv`, and file bytes are never exposed to the manager role. |
+| **Brute-Force Protection** | In-memory lockout after 5 failed login attempts per email (15-minute cooldown). |
 | **Rate Limiting** | 500 requests per 15-minute window per IP |
 | **Security Headers** | Helmet sets 15+ HTTP headers (XSS, HSTS, CSP, etc.) |
 | **CORS** | Restricted to `FRONTEND_URL` only |
@@ -1010,18 +1062,42 @@ Error codes: `403` token expired or will not triggered · `404` token not found
 </details>
 
 <details>
-<summary><strong>OAuth Flow (Google / GitHub)</strong></summary>
+<summary><strong>OAuth Flow — Sign-in (Google / GitHub)</strong></summary>
 
 ```
-1. User clicks OAuth button  →  browser navigates to /api/auth/google
+1. User clicks OAuth button on /login  →  browser navigates to /api/auth/google
+2. requireOAuth guard checks passport._strategies — if provider not configured,
+   redirects immediately to FRONTEND_URL/login?error=oauth_not_configured
+3. Passport redirects to provider consent screen
+4. Provider redirects to /api/auth/google/callback
+5. findOAuthUser:
+   a. Lookup by oauth_provider + oauth_id (already linked)
+   b. OR lookup by email only (links the provider to the existing account)
+   c. If no match  →  failureRedirect: FRONTEND_URL/login?error=account_not_found
+6. If two_fa_enabled = 1  →  issue tempToken (5 min) and redirect to:
+   FRONTEND_URL/login?requires2FA=1&tempToken=<tempToken>
+7. Otherwise  →  sign full JWT and redirect to:
+   FRONTEND_URL/login?token=<jwt>&role=<role>
+8. Login.jsx useEffect reads URL params, calls /api/auth/me, stores token
+   (if requires2FA, shows OTP input using same 2FA flow as standard login)
+```
+
+</details>
+
+<details>
+<summary><strong>OAuth Flow — Sign-up (Google / GitHub)</strong></summary>
+
+```
+1. User clicks OAuth button on /register  →  navigates to /api/auth/google?mode=register
 2. Passport redirects to provider consent screen
-3. Provider redirects to /api/auth/google/callback
-4. findOrCreateOAuthUser:
-   a. Find existing account by oauth_provider + oauth_id
-   b. OR link to existing account by matching email
-   c. OR create new account with a random bcrypt password
-5. Server signs JWT  →  redirect to FRONTEND_URL/login?token=<jwt>&role=<role>
-6. Login.jsx useEffect reads URL params, calls /api/auth/me, stores token
+3. Provider redirects to callback
+4. If email is already registered  →  redirect to FRONTEND_URL/login?error=account_not_found
+5. If email is new  →  store profile in a short-lived token, redirect to:
+   FRONTEND_URL/register?oauth_token=<token>
+6. Register.jsx detects oauth_token → calls GET /api/auth/oauth/pending?token=<token>
+   to pre-fill name + email; user completes the form and optionally sets a password
+7. POST /api/auth/register/oauth  →  creates account, links oauth_provider + oauth_id
+8. Server signs JWT  →  redirects to role-appropriate page
 ```
 
 </details>
@@ -1033,18 +1109,20 @@ Error codes: `403` token expired or will not triggered · `404` token not found
 | `/api/auth/register` · `/api/auth/login` | None | — |
 | `/api/auth/2fa/verify` | tempToken | — |
 | `/api/auth/google` · `/api/auth/github` (+ callbacks) | None | — |
-| `/api/beneficiaries/access/:token` | None | — |
+| `/api/auth/oauth/pending` · `/api/auth/register/oauth` | None | — |
+| `/api/beneficiaries/access/:token` · `/api/beneficiaries/access/:token/document/:docId` | None | — |
 | `/api/health` | None | — |
 | `/api/auth/me` · `/api/auth/logout` · `/api/auth/2fa/*` | JWT | any |
-| `/api/wills` · `/api/assets` · `/api/documents` · `/api/checkin` | JWT | `user` or `manager` |
+| `/api/auth/wallet-key` | JWT | `user` only |
+| `/api/wills` · `/api/assets` · `/api/documents` · `/api/checkin` | JWT | `user` only |
 | `/api/admin/*` | JWT | `admin` only |
+| `/api/manager/*` | JWT | `manager` only |
 
 ### Known Limitations
 
 | Limitation | Notes |
 |------------|-------|
 | JWT not invalidatable before expiry | Refresh token / blacklist pattern not yet implemented |
-| Asset content not encrypted | `assets.iv` column reserved — encryption not yet applied |
 | No email verification | Users can register with any email |
 | No password reset flow | No forgot-password / reset-via-email flow |
 
@@ -1171,7 +1249,9 @@ Admins are redirected to `/admin` after login and have no access to the user-sid
 - Time unit badge (minutes vs days)
 - **Force Check** — runs Dead Man's Switch immediately
 - **Reset Check-in** — set any user's `last_checkin` to N units ago
-- **Triggered Wills** — per-beneficiary access links, Ethereal email previews, reset buttons
+- **Triggered Wills** — per-beneficiary notification status, `accessed_at` indicator, Ethereal email previews, reset buttons
+
+> **Security note:** Beneficiary access tokens (`access_token`) are never returned to the admin. The admin sees a `token_valid` boolean and `accessed_at` timestamp only. Actual document content remains inaccessible to the admin role by design.
 
 ---
 
@@ -1181,22 +1261,26 @@ Admins are redirected to `/admin` after login and have no access to the user-sid
 
 | Path | Component | Auth | Role | Description |
 |------|-----------|:----:|------|-------------|
-| `/login` | Login | — | — | Login + 2FA step + OAuth handler |
-| `/register` | Register | — | — | Registration + OAuth buttons |
-| `/dashboard` | Dashboard | ✓ | user | Check-in status overview |
+| `/login` | Login | — | — | Login + 2FA step + OAuth handler (error auto-dismiss 10s) |
+| `/register` | Register | — | — | Registration + OAuth buttons + profile completion step |
+| `/dashboard` | Dashboard | ✓ | user | Stats cards + check-in progress bar + will overview |
 | `/will` | MyWill | ✓ | user | Will creation & settings |
-| `/assets` | Assets | ✓ | user | Asset management |
+| `/assets` | Assets | ✓ | user | Asset management (AES-256-GCM browser decryption) |
 | `/documents` | Documents | ✓ | user | Upload / download / verify |
 | `/beneficiaries` | Beneficiaries | ✓ | user | Trustee management |
 | `/verification` | Verification | ✓ | user | Check-in page |
-| `/settings/2fa` | TwoFactorSetup | ✓ | user | Enable / disable 2FA |
-| `/admin` | AdminPanel | ✓ | admin | Admin panel (5 tabs) |
-| `/access/:token` | BeneficiaryAccess | — | — | Public trustee access |
-| `/` · `*` | SmartRedirect | — | — | Redirect by auth state |
+| `/settings/2fa` | TwoFactorSetup | ✓ | any | Enable / disable 2FA |
+| `/admin` | AdminPanel | ✓ | admin | Admin panel (5 tabs — metadata only) |
+| `/manager` | ManagerPanel | ✓ | manager | Document review + integrity verification |
+| `/access/:token` | BeneficiaryAccess | — | — | Public trustee access (requires triggered will) |
+| `/access-denied` | AccessDenied | — | — | Shown when a role tries to access a restricted route |
+| `/` · `*` | SmartRedirect / NotFound | — | — | Redirect by role or 404 |
 
 ### Key Components
 
-**`Sidebar.jsx`** — Role-aware navigation. Admin and user get completely different link sets. Shows name, email, role badge, and logout.
+**`Sidebar.jsx`** — Role-aware navigation. All four roles (`user`, `admin`, `manager`, and the hidden super-admin) get distinct link sets. Shows name, email, role badge, and logout. Mobile-responsive via `SidebarContext` (overlay + hamburger toggle in `Navbar`).
+
+**`SidebarContext.jsx`** — React context that manages sidebar open/close state on mobile. Wraps the app in `App.jsx` via `SidebarProvider`.
 
 **`CheckinBanner.jsx`** — Amber/red banner across all user pages when check-in is overdue. Polls `/api/checkin/status` every 30 seconds. Includes inline "أنا بخير ✓" button. Hidden for admins.
 
@@ -1244,17 +1328,26 @@ Set `TIME_UNIT=minutes` in `.env` and restart the backend.
 - [x] SHA-256 document integrity verification
 - [x] RSA-2048 digital signatures — auto-generated key pair
 - [x] TOTP two-factor authentication (Google Authenticator / Authy)
-- [x] Google + GitHub OAuth login
+- [x] Google + GitHub OAuth login (find-only — no auto-registration)
+- [x] OAuth sign-up with profile completion step from `/register`
+- [x] OAuth + 2FA support (tempToken flow for existing accounts with 2FA enabled)
+- [x] AES-256-GCM asset content encryption — per-user key, browser decryption via Web Crypto API
+- [x] Beneficiary access gated on `wills.status = 'triggered'`
+- [x] Mobile-responsive sidebar (SidebarContext, overlay, lucide-react icons)
 - [x] HTTP → HTTPS automatic redirect
+- [x] Manager role — document integrity reviewer (verify-only, no download, no plaintext)
+- [x] Zero-Trust admin model — admin sees metadata only; tokens, content, and encryption keys never exposed
+- [x] Brute-force login protection (5 attempts → 15-min lockout per email)
+- [x] Multer dual validation — MIME type + file extension allowlist
+- [x] Non-fatal audit logging — DB schema mismatches never crash functional operations
+- [x] AccessDenied + NotFound pages wired into RBAC routing
 
 ### 🔜 Planned
 
-- [ ] AES-256-GCM encryption for asset content (`assets.iv` column ready)
 - [ ] Refresh token pattern (short-lived access + long-lived refresh)
 - [ ] Email verification on registration
 - [ ] Password reset via email
 - [ ] Multi-language support (Arabic + English)
-- [ ] Mobile-responsive UI improvements
 - [ ] Notification preferences (frequency, channel)
 - [ ] Will versioning and history
 - [ ] Legal advisor role (limited read-only access)
