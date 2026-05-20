@@ -131,11 +131,10 @@ Store structured records with the following types:
 | `info` | General important information |
 | `note` | Personal messages or instructions |
 
-- **Content encrypted at rest** (AES-256-GCM) in MySQL — ciphertext in `content`, IV in `iv` (`ivHex:authTagHex`)
+- **Content and title encrypted at rest** (AES-256-GCM) in MySQL — ciphertext stored with `ivHex:authTagHex` IV columns
 - **Per-user encryption key** — derived from `AES_SECRET_KEY` + `userId`; only the account owner can decrypt via `GET /api/auth/wallet-key`
 - **Client-side decryption** via Web Crypto API — plaintext never sent over the API, never stored unencrypted in the DB
-- Title remains unencrypted (display label only); reveal/hide toggle in the UI
-- Assets without `iv` (`null`) were created before encryption was introduced; displayed as-is until re-saved
+- Assets without an `iv` column (`null`) were created before encryption was introduced; displayed as-is until re-saved
 
 </details>
 
@@ -437,8 +436,10 @@ CREATE TABLE users (
 CREATE TABLE wills (
     id                    CHAR(36)     PRIMARY KEY,
     user_id               CHAR(36)     NOT NULL,
-    title                 VARCHAR(255) NOT NULL,
-    description           TEXT,
+    title                 TEXT         NOT NULL,        -- AES-256-GCM ciphertext (Base64)
+    title_iv              VARCHAR(120) DEFAULT NULL,    -- ivHex:authTagHex
+    description           TEXT,                         -- AES-256-GCM ciphertext (Base64)
+    description_iv        VARCHAR(120) DEFAULT NULL,    -- ivHex:authTagHex
     checkin_interval_days INT          DEFAULT 30,
     grace_period_days     INT          DEFAULT 7,
     status                ENUM('active','triggered','expired') DEFAULT 'active',
@@ -462,9 +463,10 @@ CREATE TABLE assets (
     id          CHAR(36)    PRIMARY KEY,
     will_id     CHAR(36)    NOT NULL,
     asset_type  ENUM('account','bank','password','info','note') NOT NULL,
-    title       VARCHAR(255) NOT NULL,
-    content     TEXT         NOT NULL,
-    iv          VARCHAR(255) DEFAULT NULL,   -- AES-256-GCM ivHex:authTagHex (NULL = legacy plaintext)
+    title       TEXT         NOT NULL,        -- AES-256-GCM ciphertext (Base64)
+    title_iv    VARCHAR(120) DEFAULT NULL,    -- ivHex:authTagHex
+    content     TEXT         NOT NULL,        -- AES-256-GCM ciphertext (Base64)
+    iv          VARCHAR(255) DEFAULT NULL,    -- ivHex:authTagHex (NULL = legacy plaintext)
     created_at  DATETIME    DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (will_id) REFERENCES wills(id) ON DELETE CASCADE
@@ -512,6 +514,27 @@ CREATE TABLE beneficiaries (
     accessed_at   DATETIME     DEFAULT NULL,
     created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (will_id) REFERENCES wills(id) ON DELETE CASCADE
+);
+```
+
+</details>
+
+<details>
+<summary><code>passkeys</code></summary>
+
+```sql
+CREATE TABLE passkeys (
+    id              CHAR(36)     PRIMARY KEY,
+    user_id         CHAR(36)     NOT NULL,
+    credential_id   VARCHAR(512) NOT NULL,
+    public_key      TEXT         NOT NULL,
+    counter         BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    device_name     VARCHAR(255) DEFAULT 'جهاز',
+    transports      VARCHAR(100) DEFAULT NULL,
+    created_at      DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    last_used_at    DATETIME     DEFAULT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_passkey_credential (credential_id)
 );
 ```
 
@@ -1076,7 +1099,7 @@ Every verification is recorded in `audit_logs` as `MANAGER_VERIFY_DOC`.
 ### 🏥 Health — `GET /api/health`
 
 ```json
-{ "status": "ok", "phase": 2, "time_unit": "minutes", "timestamp": "..." }
+{ "status": "ok", "phase": 4, "time_unit": "minutes", "timestamp": "..." }
 ```
 
 ---
@@ -1091,7 +1114,8 @@ Every verification is recorded in `audit_logs` as `MANAGER_VERIFY_DOC`.
 | **JWT Authentication** | HS256, 24h expiry, verified on every request |
 | **Two-Factor Auth (TOTP)** | speakeasy — compatible with Google Authenticator and Authy |
 | **OAuth (Google + GitHub)** | Login: find-only by `oauth_id` or email — no auto-registration. Sign-up via `/register?mode=register` with profile completion. 2FA applies after OAuth when enabled. |
-| **Asset Content Encryption** | AES-256-GCM; per-user key (`HMAC-SHA256(AES_SECRET_KEY, userId)`); ciphertext in DB; client-side decrypt via Web Crypto API |
+| **Asset Encryption** | AES-256-GCM; per-user key (`HMAC-SHA256(AES_SECRET_KEY, userId)`); title + content encrypted at rest; client-side decrypt via Web Crypto API |
+| **Will Encryption** | AES-256-GCM; will title + description encrypted at rest with per-user key; admin sees only ciphertext |
 | **Document Encryption** | AES-256-GCM at rest; transparent decryption on download |
 | **Document Integrity** | SHA-256 hash stored at upload (`documents.sha256_hash`) |
 | **Digital Signatures** | RSA-2048 auto-generated key pair; each document signed at upload |
@@ -1420,6 +1444,10 @@ Set `TIME_UNIT=minutes` in `.env` and restart the backend.
 - [x] Multer dual validation — MIME type + file extension allowlist
 - [x] Non-fatal audit logging — DB schema mismatches never crash functional operations
 - [x] AccessDenied + NotFound pages wired into RBAC routing
+- [x] WebAuthn / Passkey 2FA — register and authenticate using device biometrics or hardware keys
+- [x] Will title + description encrypted at rest (AES-256-GCM, per-user key)
+- [x] Asset title encrypted at rest (AES-256-GCM, per-user key)
+- [x] Automated test suite (Jest + Supertest — 34 integration tests)
 
 ### 🔜 Planned
 
@@ -1431,7 +1459,6 @@ Set `TIME_UNIT=minutes` in `.env` and restart the backend.
 - [ ] Notification preferences (frequency, channel)
 - [ ] Will versioning and history
 - [ ] Legal advisor role (limited read-only access)
-- [ ] Automated test suite (Jest + Supertest)
 - [ ] CI/CD pipeline (GitHub Actions)
 - [ ] Docker Compose for production deployment
 - [ ] Cloud document storage (AWS S3 / Cloudflare R2)
