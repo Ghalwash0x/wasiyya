@@ -51,7 +51,7 @@ router.get('/google', requireOAuth('google'),
     passport.authenticate('google', { scope: ['profile', 'email'], session: false })
 );
 router.get('/google/callback', requireOAuth('google'),
-    passport.authenticate('google', { session: false, failureRedirect: '/login?error=google_failed' }),
+    passport.authenticate('google', { session: false, failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=account_not_found` }),
     oauthSuccess
 );
 
@@ -60,7 +60,7 @@ router.get('/github', requireOAuth('github'),
     passport.authenticate('github', { scope: ['user:email'], session: false })
 );
 router.get('/github/callback', requireOAuth('github'),
-    passport.authenticate('github', { session: false, failureRedirect: '/login?error=github_failed' }),
+    passport.authenticate('github', { session: false, failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=account_not_found` }),
     oauthSuccess
 );
 

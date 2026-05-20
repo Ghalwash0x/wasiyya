@@ -30,6 +30,10 @@ const Login = () => {
             setError('تسجيل الدخول عبر Google/GitHub غير مفعّل — يحتاج إعداد بيانات OAuth في الإعدادات');
             return;
         }
+        if (err === 'account_not_found') {
+            setError('لا يوجد حساب مرتبط بهذا البريد الإلكتروني — سجّل أولاً بالبريد وكلمة السر');
+            return;
+        }
         if (err) { setError('فشل تسجيل الدخول — حاول مجدداً'); return; }
         if (!token) return;
 
