@@ -55,6 +55,18 @@ async function migrate() {
             sql: `ALTER TABLE beneficiaries ADD COLUMN IF NOT EXISTS last_attempt_at DATETIME DEFAULT NULL`,
             desc: 'Add beneficiaries.last_attempt_at'
         },
+        {
+            sql: `ALTER TABLE wills ADD COLUMN IF NOT EXISTS title_iv VARCHAR(120) DEFAULT NULL`,
+            desc: 'Add wills.title_iv for AES-256-GCM encrypted title'
+        },
+        {
+            sql: `ALTER TABLE wills ADD COLUMN IF NOT EXISTS description_iv VARCHAR(120) DEFAULT NULL`,
+            desc: 'Add wills.description_iv for AES-256-GCM encrypted description'
+        },
+        {
+            sql: `ALTER TABLE assets ADD COLUMN IF NOT EXISTS title_iv VARCHAR(120) DEFAULT NULL`,
+            desc: 'Add assets.title_iv for AES-256-GCM encrypted title'
+        },
     ];
 
     for (const step of steps) {

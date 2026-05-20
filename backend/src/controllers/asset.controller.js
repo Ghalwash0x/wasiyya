@@ -1,16 +1,16 @@
 const pool = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
-const { encryptText } = require('../services/encryption.service');
+const { encryptText, decryptText } = require('../services/encryption.service');
 
-const toPublicAsset = (row) => ({
-    id: row.id,
-    will_id: row.will_id,
-    asset_type: row.asset_type,
-    title: row.title,
+const toPublicAsset = (row, userId) => ({
+    id:                row.id,
+    will_id:           row.will_id,
+    asset_type:        row.asset_type,
+    title:             decryptText(row.title, row.title_iv, userId),
     content_encrypted: row.content,
-    iv: row.iv,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    iv:                row.iv,
+    created_at:        row.created_at,
+    updated_at:        row.updated_at,
 });
 
 const assertWillOwner = async (willId, userId) => {
@@ -30,11 +30,11 @@ const getAssets = async (req, res) => {
         }
 
         const result = await pool.query(
-            'SELECT id, will_id, asset_type, title, content, iv, created_at, updated_at FROM assets WHERE will_id = $1 ORDER BY created_at DESC',
+            'SELECT id, will_id, asset_type, title, title_iv, content, iv, created_at, updated_at FROM assets WHERE will_id = $1 ORDER BY created_at DESC',
             [willId]
         );
 
-        res.json({ success: true, data: result.rows.map(toPublicAsset) });
+        res.json({ success: true, data: result.rows.map(r => toPublicAsset(r, req.user.id)) });
     } catch (error) {
         console.error('getAssets error:', error);
         res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
@@ -53,20 +53,21 @@ const createAsset = async (req, res) => {
             return res.status(404).json({ success: false, message: 'الوصية غير موجودة' });
         }
 
-        const { encrypted, iv } = encryptText(content, req.user.id);
-        const id = uuidv4();
+        const { encrypted: encTitle, iv: titleIv } = encryptText(title,   req.user.id);
+        const { encrypted: encContent, iv: contentIv } = encryptText(content, req.user.id);
 
+        const id = uuidv4();
         await pool.query(
-            `INSERT INTO assets (id, will_id, asset_type, title, content, iv)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [id, will_id, asset_type, title, encrypted, iv]
+            `INSERT INTO assets (id, will_id, asset_type, title, title_iv, content, iv)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [id, will_id, asset_type, encTitle, titleIv, encContent, contentIv]
         );
 
         const result = await pool.query(
-            'SELECT id, will_id, asset_type, title, content, iv, created_at, updated_at FROM assets WHERE id = $1',
+            'SELECT id, will_id, asset_type, title, title_iv, content, iv, created_at, updated_at FROM assets WHERE id = $1',
             [id]
         );
-        res.status(201).json({ success: true, data: toPublicAsset(result.rows[0]) });
+        res.status(201).json({ success: true, data: toPublicAsset(result.rows[0], req.user.id) });
     } catch (error) {
         console.error('createAsset error:', error);
         res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
@@ -88,28 +89,37 @@ const updateAsset = async (req, res) => {
             return res.status(404).json({ success: false, message: 'الأصل غير موجود' });
         }
 
-        let encrypted = existing.rows[0].content;
-        let iv = existing.rows[0].iv;
+        const row = existing.rows[0];
+
+        let encTitle   = row.title;
+        let titleIv    = row.title_iv;
+        if (title != null && title !== '') {
+            ({ encrypted: encTitle, iv: titleIv } = encryptText(title, req.user.id));
+        }
+
+        let encContent = row.content;
+        let contentIv  = row.iv;
         if (content != null && content !== '') {
-            ({ encrypted, iv } = encryptText(content, req.user.id));
+            ({ encrypted: encContent, iv: contentIv } = encryptText(content, req.user.id));
         }
 
         await pool.query(
             `UPDATE assets
-             SET title = COALESCE($1, title),
-                 asset_type = COALESCE($2, asset_type),
-                 content = $3,
-                 iv = $4,
+             SET title      = $1,
+                 title_iv   = $2,
+                 asset_type = COALESCE($3, asset_type),
+                 content    = $4,
+                 iv         = $5,
                  updated_at = NOW()
-             WHERE id = $5`,
-            [title ?? null, asset_type ?? null, encrypted, iv, id]
+             WHERE id = $6`,
+            [encTitle, titleIv, asset_type ?? null, encContent, contentIv, id]
         );
 
         const result = await pool.query(
-            'SELECT id, will_id, asset_type, title, content, iv, created_at, updated_at FROM assets WHERE id = $1',
+            'SELECT id, will_id, asset_type, title, title_iv, content, iv, created_at, updated_at FROM assets WHERE id = $1',
             [id]
         );
-        res.json({ success: true, data: toPublicAsset(result.rows[0]) });
+        res.json({ success: true, data: toPublicAsset(result.rows[0], req.user.id) });
     } catch (error) {
         console.error('updateAsset error:', error);
         res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
@@ -132,6 +142,7 @@ const deleteAsset = async (req, res) => {
 
         res.json({ success: true, message: 'تم الحذف بنجاح' });
     } catch (error) {
+        console.error('deleteAsset error:', error);
         res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
     }
 };
