@@ -13,14 +13,24 @@ const Login = () => {
     const { login }   = useAuth();
     const navigate    = useNavigate();
 
+    // Auto-dismiss error after 10 seconds
+    useEffect(() => {
+        if (!error) return;
+        const t = setTimeout(() => setError(''), 10000);
+        return () => clearTimeout(t);
+    }, [error]);
+
     // Handle OAuth redirect — token arrives as ?token=xxx&role=yyy
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const token  = params.get('token');
-        const role   = params.get('role');
         const err    = params.get('error');
 
-        if (err) { setError('فشل تسجيل الدخول عبر OAuth'); return; }
+        if (err === 'oauth_not_configured') {
+            setError('تسجيل الدخول عبر Google/GitHub غير مفعّل — يحتاج إعداد بيانات OAuth في الإعدادات');
+            return;
+        }
+        if (err) { setError('فشل تسجيل الدخول — حاول مجدداً'); return; }
         if (!token) return;
 
         api.get('/auth/me', { headers: { Authorization: `Bearer ${token}` } })
@@ -74,6 +84,7 @@ const Login = () => {
             localStorage.setItem('user', JSON.stringify(user));
             const dest = user.role === 'developer' ? '/developer'
                        : user.role === 'admin'     ? '/admin'
+                       : user.role === 'manager'   ? '/manager'
                        : '/dashboard';
             navigate(dest);
             window.location.reload();
