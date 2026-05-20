@@ -51,11 +51,12 @@ const verifyDocument = async (req, res) => {
         const hashMatch    = currentHash === doc.sha256_hash;
         const sigValid     = doc.signature ? verifySignature(doc.sha256_hash, doc.signature) : null;
 
-        // Log the manager's verification action
-        await pool.query(
-            'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
-            [uuidv4(), req.user.id, 'MANAGER_VERIFY_DOC', JSON.stringify({ doc_id: id, intact: hashMatch })]
-        );
+        try {
+            await pool.query(
+                'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
+                [uuidv4(), req.user.id, 'MANAGER_VERIFY_DOC', JSON.stringify({ doc_id: id, intact: hashMatch })]
+            );
+        } catch (e) { console.error('Audit log error:', e.message); }
 
         res.json({
             success:         true,

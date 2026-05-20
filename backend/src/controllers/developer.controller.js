@@ -26,10 +26,12 @@ const deleteUser = async (req, res) => {
         if (affected.affectedRows === 0) {
             return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
         }
-        await pool.query(
-            'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
-            [uuidv4(), req.user.id, 'DEV_DELETE_USER', JSON.stringify({ deleted_id: id })]
-        );
+        try {
+            await pool.query(
+                'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
+                [uuidv4(), req.user.id, 'DEV_DELETE_USER', JSON.stringify({ deleted_id: id })]
+            );
+        } catch (e) { console.error('Audit log error:', e.message); }
         res.json({ success: true, message: 'تم حذف المستخدم نهائياً' });
     } catch {
         res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
@@ -44,14 +46,13 @@ const setRole = async (req, res) => {
         if (!['admin', 'user', 'manager', 'developer'].includes(role)) {
             return res.status(400).json({ success: false, message: 'دور غير صالح' });
         }
-        const affected = await pool.query('UPDATE users SET role = $1 WHERE id = $2', [role, id]);
-        if (affected.affectedRows === 0) {
-            return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
-        }
-        await pool.query(
-            'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
-            [uuidv4(), req.user.id, 'DEV_SET_ROLE', JSON.stringify({ target_id: id, role })]
-        );
+        await pool.query('UPDATE users SET role = $1 WHERE id = $2', [role, id]);
+        try {
+            await pool.query(
+                'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
+                [uuidv4(), req.user.id, 'DEV_SET_ROLE', JSON.stringify({ target_id: id, role })]
+            );
+        } catch (e) { console.error('Audit log error:', e.message); }
         const result = await pool.query('SELECT id, full_name, email, role FROM users WHERE id = $1', [id]);
         res.json({ success: true, data: result.rows[0] });
     } catch {
@@ -87,10 +88,12 @@ const resetPassword = async (req, res) => {
         if (affected.affectedRows === 0) {
             return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
         }
-        await pool.query(
-            'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
-            [uuidv4(), req.user.id, 'DEV_RESET_PASSWORD', JSON.stringify({ target_id: id })]
-        );
+        try {
+            await pool.query(
+                'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
+                [uuidv4(), req.user.id, 'DEV_RESET_PASSWORD', JSON.stringify({ target_id: id })]
+            );
+        } catch (e) { console.error('Audit log error:', e.message); }
         res.json({ success: true, message: 'تم إعادة تعيين كلمة السر' });
     } catch {
         res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
@@ -109,10 +112,12 @@ const restoreWill = async (req, res) => {
              notified_at = NULL, email_status = 'pending', email_attempts = 0,
              last_attempt_at = NULL WHERE will_id = $1`, [id]
         );
-        await pool.query(
-            'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
-            [uuidv4(), req.user.id, 'DEV_RESTORE_WILL', JSON.stringify({ will_id: id })]
-        );
+        try {
+            await pool.query(
+                'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
+                [uuidv4(), req.user.id, 'DEV_RESTORE_WILL', JSON.stringify({ will_id: id })]
+            );
+        } catch (e) { console.error('Audit log error:', e.message); }
         res.json({ success: true, message: 'تم استعادة الوصية إلى نشطة' });
     } catch {
         res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
@@ -126,10 +131,12 @@ const clear2FA = async (req, res) => {
         await pool.query(
             'UPDATE users SET two_fa_enabled = 0, two_fa_secret = NULL WHERE id = $1', [id]
         );
-        await pool.query(
-            'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
-            [uuidv4(), req.user.id, 'DEV_CLEAR_2FA', JSON.stringify({ target_id: id })]
-        );
+        try {
+            await pool.query(
+                'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
+                [uuidv4(), req.user.id, 'DEV_CLEAR_2FA', JSON.stringify({ target_id: id })]
+            );
+        } catch (e) { console.error('Audit log error:', e.message); }
         res.json({ success: true, message: 'تم مسح المصادقة الثنائية' });
     } catch {
         res.status(500).json({ success: false, message: 'خطأ في السيرفر' });

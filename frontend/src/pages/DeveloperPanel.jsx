@@ -129,7 +129,6 @@ const UsersTab = ({ users, onRefresh }) => {
                                         <option value="user">مستخدم</option>
                                         <option value="manager">مراجع</option>
                                         <option value="admin">أدمن</option>
-                                        <option value="developer">مطور</option>
                                     </select>
 
                                     {/* Toggle */}

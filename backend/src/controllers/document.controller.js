@@ -105,11 +105,12 @@ const downloadDocument = async (req, res) => {
         // Decrypt in memory → send buffer (does not modify the stored encrypted file)
         const plainBuffer = decryptFile(doc.stored_path, doc.iv);
 
-        // Audit every decryption event with owner ID + document ID (no sensitive content)
-        await pool.query(
-            'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
-            [uuidv4(), req.user.id, 'DOC_DOWNLOAD', JSON.stringify({ doc_id: doc.id, original_name: doc.original_name })]
-        );
+        try {
+            await pool.query(
+                'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
+                [uuidv4(), req.user.id, 'DOC_DOWNLOAD', JSON.stringify({ doc_id: doc.id, original_name: doc.original_name })]
+            );
+        } catch (e) { console.error('Audit log error:', e.message); }
 
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.original_name)}"`);
         res.setHeader('Content-Type', doc.mime_type);

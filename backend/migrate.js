@@ -20,7 +20,11 @@ async function migrate() {
     const steps = [
         {
             sql: `ALTER TABLE users MODIFY COLUMN role ENUM('admin','user','manager','developer') DEFAULT 'user'`,
-            desc: 'Add developer role to users.role ENUM'
+            desc: 'Add manager + developer roles to users.role ENUM'
+        },
+        {
+            sql: `ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS details TEXT DEFAULT NULL`,
+            desc: 'Add audit_logs.details for structured action metadata'
         },
         {
             sql: `ALTER TABLE beneficiaries ADD COLUMN IF NOT EXISTS email_status ENUM('pending','sent','failed') DEFAULT 'pending'`,

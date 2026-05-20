@@ -260,10 +260,12 @@ const bootstrapDeveloper = async (req, res) => {
         await pool.query(
             `UPDATE users SET role = 'developer' WHERE id = $1`, [req.user.id]
         );
-        await pool.query(
-            'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
-            [uuidv4(), req.user.id, 'BOOTSTRAP_DEVELOPER', JSON.stringify({ promoted_id: req.user.id })]
-        );
+        try {
+            await pool.query(
+                'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
+                [uuidv4(), req.user.id, 'BOOTSTRAP_DEVELOPER', JSON.stringify({ promoted_id: req.user.id })]
+            );
+        } catch (e) { console.error('Audit log error:', e.message); }
         res.json({
             success: true,
             message: 'تم ترقية الحساب إلى Developer — أعد تسجيل الدخول للوصول للوحة المطور',

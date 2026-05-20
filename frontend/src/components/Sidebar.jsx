@@ -70,9 +70,8 @@ const Sidebar = () => {
             <div className="p-5 border-b border-indigo-700">
                 <h1 className="text-2xl font-bold tracking-wide">وصيّة</h1>
                 <p className="text-indigo-300 text-xs mt-1">
-                    {isDeveloper ? 'Developer Console'
-                    : isAdmin    ? 'لوحة الإدارة'
-                    : isManager  ? 'Document Review'
+                    {isAdmin || isDeveloper ? 'لوحة الإدارة'
+                    : isManager             ? 'مراجعة الوثائق'
                     : 'Digital Will System'}
                 </p>
             </div>
@@ -81,7 +80,7 @@ const Sidebar = () => {
             <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
                 {isDeveloper ? (
                     <>
-                        <SectionLabel>المطور</SectionLabel>
+                        <SectionLabel>الإدارة</SectionLabel>
                         {developerLinks.map(link => (
                             <NavItem key={link.to} to={link.to} label={link.label} icon={link.icon} end={link.end} />
                         ))}
@@ -136,7 +135,7 @@ const Sidebar = () => {
                         : isAdmin     ? 'bg-amber-500  text-white'
                         : isManager   ? 'bg-teal-600   text-white'
                         : 'bg-indigo-700 text-indigo-200'}`}>
-                        {isDeveloper ? 'مطور النظام' : isAdmin ? 'مدير النظام' : isManager ? 'مراجع وثائق' : 'مستخدم'}
+                        {isDeveloper ? 'مدير النظام' : isAdmin ? 'مدير النظام' : isManager ? 'مراجع وثائق' : 'مستخدم'}
                     </span>
                 </div>
                 <button
