@@ -119,17 +119,19 @@ const UsersTab = ({ users, onRefresh }) => {
                                 </div>
 
                                 <div className="flex flex-wrap gap-2">
-                                    {/* Role selector */}
-                                    <select
-                                        value={u.role}
-                                        onChange={e => handleRole(u.id, e.target.value)}
-                                        disabled={!!loading}
-                                        className="text-xs border border-gray-200 rounded px-2 py-1 bg-white"
-                                    >
-                                        <option value="user">مستخدم</option>
-                                        <option value="manager">مراجع</option>
-                                        <option value="admin">أدمن</option>
-                                    </select>
+                                    {/* Role selector — disabled for developer accounts */}
+                                    {u.role !== 'developer' ? (
+                                        <select
+                                            value={u.role}
+                                            onChange={e => handleRole(u.id, e.target.value)}
+                                            disabled={!!loading}
+                                            className="text-xs border border-gray-200 rounded px-2 py-1 bg-white"
+                                        >
+                                            <option value="user">مستخدم</option>
+                                            <option value="manager">مراجع</option>
+                                            <option value="admin">أدمن</option>
+                                        </select>
+                                    ) : null}
 
                                     {/* Toggle */}
                                     <button

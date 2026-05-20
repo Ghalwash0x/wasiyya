@@ -319,5 +319,4 @@ module.exports = {
     loginOptions,
     loginVerify,
     getMethodsForLogin,
-    get2FAMethods,
 };

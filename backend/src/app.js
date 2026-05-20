@@ -75,7 +75,7 @@ app.use('/api/manager',       managerRoutes);
 app.get('/api/health', (req, res) => {
     res.json({
         status:    'ok',
-        phase:     3,
+        phase:     4,
         time_unit: process.env.TIME_UNIT || 'days',
         timestamp: new Date()
     });
