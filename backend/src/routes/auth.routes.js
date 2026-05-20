@@ -1,13 +1,21 @@
 const router    = require('express').Router();
 const passport  = require('../middleware/passport');
+const { findOAuthUser } = require('../middleware/passport');
 const jwt       = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const pool      = require('../config/database');
-const { register, login, getMe, logout } = require('../controllers/auth.controller');
+const {
+    register, login, getMe, logout,
+    getPendingOAuth, registerOAuth,
+} = require('../controllers/auth.controller');
 const { setup2FA, enable2FA, verify2FA, disable2FA } = require('../controllers/twofa.controller');
 const { authenticate } = require('../middleware/auth.middleware');
 
+const frontendUrl = () => process.env.FRONTEND_URL || 'http://localhost:3000';
+
 router.post('/register', register);
+router.post('/register/oauth', registerOAuth);
+router.get('/oauth/pending', getPendingOAuth);
 router.post('/login',    login);
 router.get('/me',        authenticate, getMe);
 router.post('/logout',   authenticate, logout);
@@ -18,50 +26,93 @@ router.post('/2fa/enable',  authenticate, enable2FA);
 router.post('/2fa/verify',  verify2FA);
 router.post('/2fa/disable', authenticate, disable2FA);
 
-// OAuth helper — issues JWT and redirects to frontend
-const oauthSuccess = async (req, res) => {
-    try {
-        const user = req.user;
-        const token = jwt.sign(
-            { userId: user.id, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: process.env.JWT_EXPIRES_IN }
-        );
-        await pool.query(
-            'INSERT INTO audit_logs (id, user_id, action) VALUES ($1, $2, $3)',
-            [uuidv4(), user.id, 'OAUTH_LOGIN']
-        );
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-        res.redirect(`${frontendUrl}/login?token=${token}&role=${user.role}`);
-    } catch {
-        res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=oauth_failed`);
-    }
+const issueOAuthLogin = async (res, user) => {
+    const token = jwt.sign(
+        { userId: user.id, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN }
+    );
+    await pool.query(
+        'INSERT INTO audit_logs (id, user_id, action) VALUES ($1, $2, $3)',
+        [uuidv4(), user.id, 'OAUTH_LOGIN']
+    );
+    res.redirect(`${frontendUrl()}/login?token=${token}&role=${user.role}`);
 };
 
-// Guard: redirect to frontend error if OAuth provider strategy is not registered.
-// passport._strategy() returns undefined (not throws) in modern passport — check value directly.
+const oauthLoginCallback = async (res, oauthProfile) => {
+    const user = await findOAuthUser(
+        oauthProfile.provider,
+        oauthProfile.oauth_id,
+        oauthProfile.email
+    );
+    if (!user) {
+        return res.redirect(`${frontendUrl()}/login?error=account_not_found`);
+    }
+    return issueOAuthLogin(res, user);
+};
+
+const oauthRegisterCallback = async (res, oauthProfile) => {
+    if (!oauthProfile.email) {
+        return res.redirect(`${frontendUrl()}/register?error=oauth_no_email`);
+    }
+
+    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [oauthProfile.email]);
+    if (existing.rows.length > 0) {
+        return res.redirect(`${frontendUrl()}/register?error=email_exists`);
+    }
+
+    const oauthToken = jwt.sign(
+        {
+            pendingOAuthRegister: true,
+            provider: oauthProfile.provider,
+            oauth_id: oauthProfile.oauth_id,
+            email: oauthProfile.email,
+            full_name: oauthProfile.full_name,
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '15m' }
+    );
+
+    res.redirect(`${frontendUrl()}/register?oauth_token=${oauthToken}`);
+};
+
+const handleOAuthCallback = (provider) => (req, res, next) => {
+    passport.authenticate(provider, { session: false }, async (err, oauthProfile) => {
+        if (err || !oauthProfile) {
+            const mode = req.query.state === 'register' ? 'register' : 'login';
+            const page = mode === 'register' ? 'register' : 'login';
+            return res.redirect(`${frontendUrl()}/${page}?error=oauth_failed`);
+        }
+
+        try {
+            const mode = req.query.state === 'register' ? 'register' : 'login';
+            if (mode === 'register') {
+                return oauthRegisterCallback(res, oauthProfile);
+            }
+            return oauthLoginCallback(res, oauthProfile);
+        } catch {
+            return res.redirect(`${frontendUrl()}/login?error=oauth_failed`);
+        }
+    })(req, res, next);
+};
+
 const requireOAuth = (provider) => (req, res, next) => {
     if (passport._strategies && passport._strategies[provider]) return next();
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    res.redirect(`${frontendUrl}/login?error=oauth_not_configured`);
+    const mode = req.query.mode === 'register' ? 'register' : 'login';
+    const page = mode === 'register' ? 'register' : 'login';
+    res.redirect(`${frontendUrl()}/${page}?error=oauth_not_configured`);
 };
 
-// Google OAuth
-router.get('/google', requireOAuth('google'),
-    passport.authenticate('google', { scope: ['profile', 'email'], session: false })
-);
-router.get('/google/callback', requireOAuth('google'),
-    passport.authenticate('google', { session: false, failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=account_not_found` }),
-    oauthSuccess
-);
+const startOAuth = (provider) => (req, res, next) => {
+    const mode = req.query.mode === 'register' ? 'register' : 'login';
+    const scope = provider === 'google' ? ['profile', 'email'] : ['user:email'];
+    passport.authenticate(provider, { scope, session: false, state: mode })(req, res, next);
+};
 
-// GitHub OAuth
-router.get('/github', requireOAuth('github'),
-    passport.authenticate('github', { scope: ['user:email'], session: false })
-);
-router.get('/github/callback', requireOAuth('github'),
-    passport.authenticate('github', { session: false, failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=account_not_found` }),
-    oauthSuccess
-);
+router.get('/google', requireOAuth('google'), startOAuth('google'));
+router.get('/google/callback', requireOAuth('google'), handleOAuthCallback('google'));
+
+router.get('/github', requireOAuth('github'), startOAuth('github'));
+router.get('/github/callback', requireOAuth('github'), handleOAuthCallback('github'));
 
 module.exports = router;

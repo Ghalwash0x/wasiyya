@@ -1,3 +1,4 @@
+const crypto  = require('crypto');
 const pool    = require('../config/database');
 const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcrypt');
@@ -196,4 +197,100 @@ const logout = async (req, res) => {
     res.json({ success: true, message: 'تم تسجيل الخروج بنجاح' });
 };
 
-module.exports = { register, login, getMe, logout };
+const verifyPendingOAuthToken = (token) => {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (!payload.pendingOAuthRegister) {
+        throw new Error('invalid');
+    }
+    return payload;
+};
+
+const getPendingOAuth = async (req, res) => {
+    try {
+        const { token } = req.query;
+        if (!token) {
+            return res.status(400).json({ success: false, message: 'رمز OAuth مطلوب' });
+        }
+
+        const payload = verifyPendingOAuthToken(token);
+        res.json({
+            success: true,
+            data: {
+                email: payload.email,
+                full_name: payload.full_name,
+                provider: payload.provider,
+            },
+        });
+    } catch {
+        res.status(400).json({ success: false, message: 'انتهت صلاحية رمز OAuth — حاول التسجيل مرة أخرى' });
+    }
+};
+
+const registerOAuth = async (req, res) => {
+    try {
+        const oauth_token = req.body.oauth_token || '';
+        const full_name   = (req.body.full_name || '').trim();
+        const password    = req.body.password || '';
+
+        if (!oauth_token || !full_name) {
+            return res.status(400).json({ success: false, message: 'الاسم الكامل مطلوب' });
+        }
+
+        let payload;
+        try {
+            payload = verifyPendingOAuthToken(oauth_token);
+        } catch {
+            return res.status(400).json({ success: false, message: 'انتهت صلاحية رمز OAuth — حاول التسجيل مرة أخرى' });
+        }
+
+        const email = payload.email;
+        if (!email || !EMAIL_RE.test(email)) {
+            return res.status(400).json({ success: false, message: 'لا يمكن إنشاء الحساب بدون بريد إلكتروني صالح' });
+        }
+
+        if (password) {
+            const passwordErrors = validatePassword(password);
+            if (passwordErrors.length > 0) {
+                return res.status(400).json({ success: false, message: 'كلمة السر لا تستوفي الشروط', errors: passwordErrors });
+            }
+        }
+
+        const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+        if (existing.rows.length > 0) {
+            return res.status(409).json({ success: false, message: 'البريد الإلكتروني مسجل مسبقاً' });
+        }
+
+        const plainPassword = password || crypto.randomBytes(32).toString('hex');
+        const hashedPassword = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
+        const id = uuidv4();
+
+        await pool.query(
+            `INSERT INTO users (id, full_name, email, password, role, oauth_provider, oauth_id)
+             VALUES ($1, $2, $3, $4, 'user', $5, $6)`,
+            [id, full_name, email, hashedPassword, payload.provider, payload.oauth_id]
+        );
+
+        const result = await pool.query(
+            'SELECT id, full_name, email, role, created_at FROM users WHERE id = $1', [id]
+        );
+        const user = result.rows[0];
+
+        const token = jwt.sign(
+            { userId: user.id, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: process.env.JWT_EXPIRES_IN }
+        );
+
+        await pool.query(
+            'INSERT INTO audit_logs (id, user_id, action, ip_address) VALUES ($1, $2, $3, $4)',
+            [uuidv4(), user.id, 'USER_REGISTERED_OAUTH', req.ip]
+        );
+
+        res.status(201).json({ success: true, message: 'تم إنشاء الحساب بنجاح', data: { user, token } });
+    } catch (error) {
+        console.error('Register OAuth error:', error);
+        res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
+    }
+};
+
+module.exports = { register, login, getMe, logout, getPendingOAuth, registerOAuth };
