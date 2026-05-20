@@ -61,12 +61,9 @@ const HomeTab = ({ stats, logs, triggeredWills }) => (
                                     <p className="font-medium text-sm text-gray-800 truncate">{w.title}</p>
                                     <p className="text-xs text-gray-500">{w.full_name} — {new Date(w.triggered_at).toLocaleString('ar')}</p>
                                 </div>
-                                {w.beneficiaries?.map(b => b.access_url && (
-                                    <a key={b.id} href={b.access_url} target="_blank" rel="noopener noreferrer"
-                                       className="text-xs bg-indigo-600 text-white px-2 py-1 rounded shrink-0">
-                                        افتح
-                                    </a>
-                                ))}
+                                {w.beneficiaries?.some(b => b.accessed_at) && (
+                                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded shrink-0">تم الفتح</span>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -394,13 +391,8 @@ const TestTab = ({ users, timeUnit, emailMode, triggeredWills, onRefresh }) => {
                                                     : '⏳ معلّق'}
                                                 </span>
                                                 {b.token_valid && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">رابط صالح</span>}
-                                                {b.accessed_at && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">تم الفتح</span>}
-                                                {b.access_url && (
-                                                    <a href={b.access_url} target="_blank" rel="noopener noreferrer"
-                                                        className="text-xs bg-indigo-600 text-white px-3 py-1 rounded font-medium hover:bg-indigo-700">
-                                                        افتح الوصية
-                                                    </a>
-                                                )}
+                                                {b.accessed_at && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">✓ تم الفتح</span>}
+                                                {/* access_url intentionally absent — admin cannot be a document recipient */}
                                                 {b.email_preview && (
                                                     <a href={b.email_preview} target="_blank" rel="noopener noreferrer"
                                                         className="text-xs bg-amber-500 text-white px-3 py-1 rounded font-medium hover:bg-amber-600">

@@ -178,8 +178,11 @@ const getTriggeredWills = async (req, res) => {
 
         const result = [];
         for (const w of wills.rows) {
+            // SECURITY: Never select access_token — admin must not hold beneficiary credentials.
+            // The token is the beneficiary's access key; exposing it to admin would allow
+            // document decryption via the public token endpoint (privilege escalation).
             const bens = await pool.query(`
-                SELECT id, name, email, access_token, token_expires, notified_at, accessed_at,
+                SELECT id, name, email, token_expires, notified_at, accessed_at,
                        email_status, email_attempts, last_attempt_at
                 FROM beneficiaries
                 WHERE will_id = $1
@@ -188,12 +191,17 @@ const getTriggeredWills = async (req, res) => {
             result.push({
                 ...w,
                 beneficiaries: bens.rows.map(b => ({
-                    ...b,
-                    access_url: b.access_token
-                        ? `${process.env.FRONTEND_URL}/access/${b.access_token}`
-                        : null,
-                    token_valid:   b.token_expires ? new Date(b.token_expires) > new Date() : false,
-                    email_preview: emailService.getPreview(b.id)
+                    id:              b.id,
+                    name:            b.name,
+                    email:           b.email,
+                    notified_at:     b.notified_at,
+                    accessed_at:     b.accessed_at,
+                    email_status:    b.email_status,
+                    email_attempts:  b.email_attempts,
+                    last_attempt_at: b.last_attempt_at,
+                    token_valid:     b.token_expires ? new Date(b.token_expires) > new Date() : false,
+                    // access_url intentionally omitted — admin is not a document recipient
+                    email_preview:   emailService.getPreview(b.id) // Ethereal test-mode only
                 }))
             });
         }
@@ -207,11 +215,16 @@ const getTriggeredWills = async (req, res) => {
 // جلب كل الوصايا في النظام
 const getAllWills = async (req, res) => {
     try {
+        // SECURITY: explicit column list — description (will text content) is omitted.
+        // Admin may only see system metadata, not will content.
         const result = await pool.query(`
-            SELECT w.*, u.full_name, u.email AS owner_email,
-                (SELECT COUNT(*) FROM assets  WHERE will_id = w.id) AS assets_count,
-                (SELECT COUNT(*) FROM documents WHERE will_id = w.id) AS docs_count,
-                (SELECT COUNT(*) FROM beneficiaries WHERE will_id = w.id) AS ben_count
+            SELECT w.id, w.title, w.status,
+                   w.checkin_interval_days, w.grace_period_days,
+                   w.triggered_at, w.created_at,
+                   u.full_name, u.email AS owner_email,
+                   (SELECT COUNT(*) FROM assets       WHERE will_id = w.id) AS assets_count,
+                   (SELECT COUNT(*) FROM documents    WHERE will_id = w.id) AS docs_count,
+                   (SELECT COUNT(*) FROM beneficiaries WHERE will_id = w.id) AS ben_count
             FROM wills w
             JOIN users u ON w.user_id = u.id
             ORDER BY w.created_at DESC

@@ -79,6 +79,16 @@ const downloadDocument = async (req, res) => {
     try {
         const { id } = req.params;
 
+        // Belt-and-suspenders: RBAC middleware already enforces authorize('user'),
+        // but explicitly reject here in case of any future middleware misconfiguration.
+        // Only document owners (role=user) can ever receive decrypted content.
+        if (req.user.role !== 'user') {
+            return res.status(403).json({
+                success: false,
+                message: 'الوثائق خاصة بأصحابها — المدراء والمراجعون لا يملكون صلاحية فك التشفير'
+            });
+        }
+
         const result = await pool.query(
             `SELECT d.* FROM documents d
              JOIN wills w ON d.will_id = w.id
@@ -94,6 +104,12 @@ const downloadDocument = async (req, res) => {
 
         // Decrypt in memory → send buffer (does not modify the stored encrypted file)
         const plainBuffer = decryptFile(doc.stored_path, doc.iv);
+
+        // Audit every decryption event with owner ID + document ID (no sensitive content)
+        await pool.query(
+            'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',
+            [uuidv4(), req.user.id, 'DOC_DOWNLOAD', JSON.stringify({ doc_id: doc.id, original_name: doc.original_name })]
+        );
 
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.original_name)}"`);
         res.setHeader('Content-Type', doc.mime_type);
