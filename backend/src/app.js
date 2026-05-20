@@ -107,7 +107,11 @@ app.use((err, req, res, next) => {
     res.status(500).json({ success: false, message: 'خطأ داخلي في السيرفر' });
 });
 
-startCheckinCron();
+if (process.env.NODE_ENV !== 'test') startCheckinCron();
+
+module.exports = app;
+
+if (require.main === module) {
 
 const PORT      = process.env.PORT || 3001;
 const HTTP_PORT = process.env.HTTP_PORT || 3080;
@@ -139,3 +143,5 @@ if (sslEnabled) {
         console.log(`💡 HTTPS: run "npm run ssl:generate" then set USE_HTTPS=true in .env`);
     });
 }
+
+} // end require.main === module

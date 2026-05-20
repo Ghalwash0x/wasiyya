@@ -53,7 +53,7 @@ const updateWill = async (req, res) => {
                  grace_period_days = COALESCE($4, grace_period_days),
                  updated_at = NOW()
              WHERE id = $5 AND user_id = $6`,
-            [title, description, checkin_interval_days, grace_period_days, id, req.user.id]
+            [title ?? null, description ?? null, checkin_interval_days ?? null, grace_period_days ?? null, id, req.user.id]
         );
 
         if (affected.affectedRows === 0) {
