@@ -176,4 +176,44 @@ const verifyDocument = async (req, res) => {
     }
 };
 
-module.exports = { uploadDocument, getDocuments, downloadDocument, deleteDocument, verifyDocument };
+// Token-based download for beneficiaries (no JWT — validates via access_token instead)
+const downloadBeneficiaryDocument = async (req, res) => {
+    try {
+        const { token, docId } = req.params;
+
+        // Validate beneficiary token and get associated will_id
+        const benResult = await pool.query(
+            `SELECT b.will_id FROM beneficiaries b
+             WHERE b.access_token = $1 AND b.token_expires > NOW()`,
+            [token]
+        );
+
+        if (benResult.rows.length === 0) {
+            return res.status(403).json({ success: false, message: 'الرابط غير صالح أو منتهي الصلاحية' });
+        }
+
+        const willId = benResult.rows[0].will_id;
+
+        // Verify document belongs to that will
+        const docResult = await pool.query(
+            'SELECT * FROM documents WHERE id = $1 AND will_id = $2',
+            [docId, willId]
+        );
+
+        if (docResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'الملف غير موجود' });
+        }
+
+        const doc = docResult.rows[0];
+        const plainBuffer = decryptFile(doc.stored_path, doc.iv);
+
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.original_name)}"`);
+        res.setHeader('Content-Type', doc.mime_type);
+        res.send(plainBuffer);
+    } catch (error) {
+        console.error('Beneficiary download error:', error);
+        res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
+    }
+};
+
+module.exports = { uploadDocument, getDocuments, downloadDocument, deleteDocument, verifyDocument, downloadBeneficiaryDocument };

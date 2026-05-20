@@ -38,15 +38,12 @@ const oauthSuccess = async (req, res) => {
     }
 };
 
-// Guard: return 501 if OAuth provider is not configured
+// Guard: redirect to frontend error if OAuth provider strategy is not registered.
+// passport._strategy() returns undefined (not throws) in modern passport — check value directly.
 const requireOAuth = (provider) => (req, res, next) => {
-    try {
-        passport._strategy(provider);  // throws if not registered
-        next();
-    } catch {
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-        res.redirect(`${frontendUrl}/login?error=oauth_not_configured`);
-    }
+    if (passport._strategies && passport._strategies[provider]) return next();
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    res.redirect(`${frontendUrl}/login?error=oauth_not_configured`);
 };
 
 // Google OAuth

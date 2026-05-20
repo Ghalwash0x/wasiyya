@@ -1,4 +1,5 @@
 const pool = require('../config/database');
+const { v4: uuidv4 } = require('uuid');
 const { runCheckinCheck } = require('../services/checkin.service');
 const emailService = require('../services/email.service');
 

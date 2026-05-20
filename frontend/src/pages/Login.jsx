@@ -28,7 +28,10 @@ const Login = () => {
                 const user = res.data.data;
                 localStorage.setItem('token', token);
                 localStorage.setItem('user', JSON.stringify(user));
-                navigate(role === 'admin' ? '/admin' : '/dashboard');
+                const dest = user.role === 'developer' ? '/developer'
+                           : user.role === 'admin'     ? '/admin'
+                           : '/dashboard';
+                navigate(dest);
                 window.location.reload();
             })
             .catch(() => setError('فشل التحقق من token OAuth'));
@@ -47,9 +50,11 @@ const Login = () => {
                 const { user, token } = res.data.data;
                 localStorage.setItem('token', token);
                 localStorage.setItem('user', JSON.stringify(user));
-                // Re-use AuthContext by triggering login (token already set above)
-                navigate(user.role === 'admin' ? '/admin' : '/dashboard');
-                window.location.reload(); // Sync AuthContext state
+                const dest = user.role === 'developer' ? '/developer'
+                           : user.role === 'admin'     ? '/admin'
+                           : '/dashboard';
+                navigate(dest);
+                window.location.reload();
             }
         } catch (err) {
             setError(err.response?.data?.message || 'حدث خطأ، حاول مجدداً');
@@ -65,7 +70,10 @@ const Login = () => {
             const { user, token } = res.data.data;
             localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify(user));
-            navigate(user.role === 'admin' ? '/admin' : '/dashboard');
+            const dest = user.role === 'developer' ? '/developer'
+                       : user.role === 'admin'     ? '/admin'
+                       : '/dashboard';
+            navigate(dest);
             window.location.reload();
         } catch (err) {
             setError(err.response?.data?.message || 'كود التحقق غير صحيح');
@@ -86,8 +94,9 @@ const Login = () => {
                         <h2 className="text-xl font-bold text-gray-800 mb-6">تسجيل الدخول</h2>
 
                         {error && (
-                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
-                                {error}
+                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm flex items-start justify-between gap-2">
+                                <span>{error}</span>
+                                <button onClick={() => setError('')} className="text-red-400 hover:text-red-700 font-bold leading-none shrink-0">×</button>
                             </div>
                         )}
 
@@ -155,8 +164,9 @@ const Login = () => {
                         </div>
 
                         {error && (
-                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
-                                {error}
+                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm flex items-start justify-between gap-2">
+                                <span>{error}</span>
+                                <button onClick={() => setError('')} className="text-red-400 hover:text-red-700 font-bold leading-none shrink-0">×</button>
                             </div>
                         )}
 

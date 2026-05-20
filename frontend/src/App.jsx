@@ -37,13 +37,14 @@ const App = () => (
                 <Route path="/register" element={<Register />} />
                 <Route path="/access/:token" element={<BeneficiaryAccess />} />
 
-                {/* User routes */}
-                <Route path="/dashboard"    element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                <Route path="/will"         element={<ProtectedRoute><MyWill /></ProtectedRoute>} />
-                <Route path="/assets"       element={<ProtectedRoute><Assets /></ProtectedRoute>} />
-                <Route path="/documents"    element={<ProtectedRoute><Documents /></ProtectedRoute>} />
-                <Route path="/beneficiaries" element={<ProtectedRoute><Beneficiaries /></ProtectedRoute>} />
-                <Route path="/verification"  element={<ProtectedRoute><Verification /></ProtectedRoute>} />
+                {/* User-only routes — admin/developer get AccessDenied */}
+                <Route path="/dashboard"    element={<ProtectedRoute><RoleRoute roles={['user']}><Dashboard /></RoleRoute></ProtectedRoute>} />
+                <Route path="/will"         element={<ProtectedRoute><RoleRoute roles={['user']}><MyWill /></RoleRoute></ProtectedRoute>} />
+                <Route path="/assets"       element={<ProtectedRoute><RoleRoute roles={['user']}><Assets /></RoleRoute></ProtectedRoute>} />
+                <Route path="/documents"    element={<ProtectedRoute><RoleRoute roles={['user']}><Documents /></RoleRoute></ProtectedRoute>} />
+                <Route path="/beneficiaries" element={<ProtectedRoute><RoleRoute roles={['user']}><Beneficiaries /></RoleRoute></ProtectedRoute>} />
+                <Route path="/verification"  element={<ProtectedRoute><RoleRoute roles={['user']}><Verification /></RoleRoute></ProtectedRoute>} />
+                {/* 2FA is role-agnostic — all authenticated users can manage their own 2FA */}
                 <Route path="/settings/2fa" element={<ProtectedRoute><TwoFactorSetup /></ProtectedRoute>} />
 
                 {/* Admin routes */}

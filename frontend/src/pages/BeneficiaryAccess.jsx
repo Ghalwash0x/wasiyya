@@ -27,7 +27,9 @@ const BeneficiaryAccess = () => {
 
     const handleDownload = async (doc) => {
         try {
-            const res = await fetch(`/api/documents/download/${doc.id}`);
+            // Use token-based endpoint — no JWT required for beneficiary access
+            const res = await fetch(`/api/beneficiaries/access/${token}/document/${doc.id}`);
+            if (!res.ok) throw new Error('fetch failed');
             const blob = await res.blob();
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
