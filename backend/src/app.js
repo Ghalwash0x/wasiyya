@@ -17,6 +17,7 @@ const beneficiaryRoutes = require('./routes/beneficiary.routes');
 const checkinRoutes     = require('./routes/checkin.routes');
 const adminRoutes       = require('./routes/admin.routes');
 const developerRoutes   = require('./routes/developer.routes');
+const managerRoutes     = require('./routes/manager.routes');
 
 const { startCheckinCron } = require('./services/checkin.service');
 
@@ -69,6 +70,7 @@ app.use('/api/beneficiaries', beneficiaryRoutes);
 app.use('/api/checkin',       checkinRoutes);
 app.use('/api/admin',         adminRoutes);
 app.use('/api/developer',     developerRoutes);
+app.use('/api/manager',       managerRoutes);
 
 app.get('/api/health', (req, res) => {
     res.json({

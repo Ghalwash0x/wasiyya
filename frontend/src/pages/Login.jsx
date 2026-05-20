@@ -30,6 +30,7 @@ const Login = () => {
                 localStorage.setItem('user', JSON.stringify(user));
                 const dest = user.role === 'developer' ? '/developer'
                            : user.role === 'admin'     ? '/admin'
+                           : user.role === 'manager'   ? '/manager'
                            : '/dashboard';
                 navigate(dest);
                 window.location.reload();
@@ -52,6 +53,7 @@ const Login = () => {
                 localStorage.setItem('user', JSON.stringify(user));
                 const dest = user.role === 'developer' ? '/developer'
                            : user.role === 'admin'     ? '/admin'
+                           : user.role === 'manager'   ? '/manager'
                            : '/dashboard';
                 navigate(dest);
                 window.location.reload();

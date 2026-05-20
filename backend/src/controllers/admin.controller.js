@@ -42,7 +42,7 @@ const changeUserRole = async (req, res) => {
     try {
         const { id } = req.params;
         const { role } = req.body;
-        if (!['admin', 'user'].includes(role)) {
+        if (!['admin', 'user', 'manager'].includes(role)) {
             return res.status(400).json({ success: false, message: 'دور غير صالح' });
         }
         const target = await pool.query('SELECT role FROM users WHERE id = $1', [id]);

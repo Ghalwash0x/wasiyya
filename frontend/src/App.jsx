@@ -16,6 +16,7 @@ import AdminPanel       from './pages/AdminPanel';
 import DeveloperPanel   from './pages/DeveloperPanel';
 import BeneficiaryAccess from './pages/BeneficiaryAccess';
 import TwoFactorSetup  from './pages/TwoFactorSetup';
+import ManagerPanel    from './pages/ManagerPanel';
 import NotFound        from './pages/NotFound';
 
 // Redirect to correct home based on role
@@ -23,9 +24,10 @@ const SmartRedirect = () => {
     const { user, loading } = useAuth();
     if (loading) return null;
     if (!user)                    return <Navigate to="/login"     replace />;
-    if (user.role === 'admin')    return <Navigate to="/admin"     replace />;
+    if (user.role === 'admin')     return <Navigate to="/admin"     replace />;
     if (user.role === 'developer') return <Navigate to="/developer" replace />;
-    return                               <Navigate to="/dashboard"  replace />;
+    if (user.role === 'manager')   return <Navigate to="/manager"   replace />;
+    return                                <Navigate to="/dashboard"  replace />;
 };
 
 const App = () => (
@@ -61,6 +63,15 @@ const App = () => (
                     <ProtectedRoute>
                         <RoleRoute roles={['developer']}>
                             <DeveloperPanel />
+                        </RoleRoute>
+                    </ProtectedRoute>
+                } />
+
+                {/* Manager routes */}
+                <Route path="/manager" element={
+                    <ProtectedRoute>
+                        <RoleRoute roles={['manager']}>
+                            <ManagerPanel />
                         </RoleRoute>
                     </ProtectedRoute>
                 } />

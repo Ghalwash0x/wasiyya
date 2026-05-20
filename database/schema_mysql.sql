@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     full_name       VARCHAR(255) NOT NULL,
     email           VARCHAR(255) UNIQUE NOT NULL,
     password        VARCHAR(500) NOT NULL,
-    role            ENUM('admin', 'user', 'developer') DEFAULT 'user',
+    role            ENUM('admin', 'user', 'developer', 'manager') DEFAULT 'user',
     two_fa_secret   VARCHAR(255) DEFAULT NULL,
     two_fa_enabled  TINYINT(1) DEFAULT 0,
     oauth_provider  VARCHAR(50) DEFAULT NULL,

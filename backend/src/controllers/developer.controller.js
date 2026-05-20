@@ -36,12 +36,12 @@ const deleteUser = async (req, res) => {
     }
 };
 
-// Set any role (admin, user, developer)
+// Set any role (admin, user, manager, developer)
 const setRole = async (req, res) => {
     try {
         const { id } = req.params;
         const { role } = req.body;
-        if (!['admin', 'user', 'developer'].includes(role)) {
+        if (!['admin', 'user', 'manager', 'developer'].includes(role)) {
             return res.status(400).json({ success: false, message: 'دور غير صالح' });
         }
         const affected = await pool.query('UPDATE users SET role = $1 WHERE id = $2', [role, id]);

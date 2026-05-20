@@ -23,6 +23,10 @@ const developerLinks = [
     { to: '/developer',        label: 'لوحة المطور',    icon: '⚙️', end: true  },
 ];
 
+const managerLinks = [
+    { to: '/manager', label: 'مراجعة الوثائق', icon: '🔍', end: true },
+];
+
 const accountLinks = [
     { to: '/settings/2fa',     label: 'المصادقة الثنائية', icon: '🔐' },
 ];
@@ -53,6 +57,7 @@ const Sidebar = () => {
     const navigate = useNavigate();
     const isAdmin     = user?.role === 'admin';
     const isDeveloper = user?.role === 'developer';
+    const isManager   = user?.role === 'manager';
 
     const handleLogout = async () => {
         await logout();
@@ -65,7 +70,10 @@ const Sidebar = () => {
             <div className="p-5 border-b border-indigo-700">
                 <h1 className="text-2xl font-bold tracking-wide">وصيّة</h1>
                 <p className="text-indigo-300 text-xs mt-1">
-                    {isDeveloper ? 'Developer Console' : isAdmin ? 'لوحة الإدارة' : 'Digital Will System'}
+                    {isDeveloper ? 'Developer Console'
+                    : isAdmin    ? 'لوحة الإدارة'
+                    : isManager  ? 'Document Review'
+                    : 'Digital Will System'}
                 </p>
             </div>
 
@@ -75,6 +83,17 @@ const Sidebar = () => {
                     <>
                         <SectionLabel>المطور</SectionLabel>
                         {developerLinks.map(link => (
+                            <NavItem key={link.to} to={link.to} label={link.label} icon={link.icon} end={link.end} />
+                        ))}
+                        <SectionLabel>الحساب</SectionLabel>
+                        {accountLinks.map(link => (
+                            <NavItem key={link.to} to={link.to} label={link.label} icon={link.icon} />
+                        ))}
+                    </>
+                ) : isManager ? (
+                    <>
+                        <SectionLabel>المراجعة</SectionLabel>
+                        {managerLinks.map(link => (
                             <NavItem key={link.to} to={link.to} label={link.label} icon={link.icon} end={link.end} />
                         ))}
                         <SectionLabel>الحساب</SectionLabel>
@@ -114,9 +133,10 @@ const Sidebar = () => {
                     <p className="text-indigo-300 text-xs truncate mt-0.5">{user?.email}</p>
                     <span className={`inline-block mt-1.5 px-2 py-0.5 rounded text-xs font-medium
                         ${isDeveloper ? 'bg-purple-600 text-white'
-                        : isAdmin     ? 'bg-amber-500 text-white'
+                        : isAdmin     ? 'bg-amber-500  text-white'
+                        : isManager   ? 'bg-teal-600   text-white'
                         : 'bg-indigo-700 text-indigo-200'}`}>
-                        {isDeveloper ? 'مطور النظام' : isAdmin ? 'مدير النظام' : 'مستخدم'}
+                        {isDeveloper ? 'مطور النظام' : isAdmin ? 'مدير النظام' : isManager ? 'مراجع وثائق' : 'مستخدم'}
                     </span>
                 </div>
                 <button

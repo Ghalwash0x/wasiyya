@@ -5,9 +5,10 @@ import api from '../services/api';
 const roleBadge = {
     developer: 'bg-purple-100 text-purple-700',
     admin:     'bg-amber-100  text-amber-700',
+    manager:   'bg-teal-100   text-teal-700',
     user:      'bg-gray-100   text-gray-600',
 };
-const roleAr = { developer: 'مطور', admin: 'أدمن', user: 'مستخدم' };
+const roleAr = { developer: 'مطور', admin: 'أدمن', manager: 'مراجع', user: 'مستخدم' };
 
 /* ───────── Stats Cards ───────── */
 const StatCard = ({ icon, label, value, color = 'indigo' }) => {
@@ -126,6 +127,7 @@ const UsersTab = ({ users, onRefresh }) => {
                                         className="text-xs border border-gray-200 rounded px-2 py-1 bg-white"
                                     >
                                         <option value="user">مستخدم</option>
+                                        <option value="manager">مراجع</option>
                                         <option value="admin">أدمن</option>
                                         <option value="developer">مطور</option>
                                     </select>
