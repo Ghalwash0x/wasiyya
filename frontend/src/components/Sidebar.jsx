@@ -2,80 +2,64 @@ import React, { useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
-import {
-    LayoutDashboard, ScrollText, Briefcase, FolderOpen,
-    Users, ShieldCheck, Settings, BarChart3, UserCog,
-    ClipboardList, FlaskConical, Search, LogOut, Wrench, X
-} from 'lucide-react';
 
 const userLinks = [
-    { to: '/dashboard',     label: 'الرئيسية',      Icon: LayoutDashboard },
-    { to: '/will',          label: 'وصيّتي',         Icon: ScrollText },
-    { to: '/assets',        label: 'الأصول',         Icon: Briefcase },
-    { to: '/documents',     label: 'الوثائق',        Icon: FolderOpen },
-    { to: '/beneficiaries', label: 'الورثة',         Icon: Users },
-    { to: '/verification',  label: 'تجديد الوجود',   Icon: ShieldCheck },
+    { to: '/dashboard',     label: 'الرئيسية',      icon: '🏠' },
+    { to: '/will',          label: 'وصيّتي',         icon: '📜' },
+    { to: '/assets',        label: 'الأصول',         icon: '💼' },
+    { to: '/documents',     label: 'الوثائق',        icon: '📁' },
+    { to: '/beneficiaries', label: 'الورثة',         icon: '👥' },
+    { to: '/verification',  label: 'تجديد الوجود',   icon: '✅' },
 ];
 
 const adminLinks = [
-    { to: '/admin',            label: 'لوحة التحكم',    Icon: BarChart3,     end: true  },
-    { to: '/admin?tab=users',  label: 'المستخدمون',     Icon: UserCog,       end: false },
-    { to: '/admin?tab=wills',  label: 'الوصايا',        Icon: ScrollText,    end: false },
-    { to: '/admin?tab=logs',   label: 'السجلات',        Icon: ClipboardList, end: false },
-    { to: '/admin?tab=test',   label: 'أدوات التيست',   Icon: FlaskConical,  end: false },
+    { to: '/admin',            label: 'لوحة التحكم',    icon: '📊', end: true  },
+    { to: '/admin?tab=users',  label: 'المستخدمون',     icon: '👤', end: false },
+    { to: '/admin?tab=wills',  label: 'الوصايا',        icon: '📜', end: false },
+    { to: '/admin?tab=logs',   label: 'السجلات',        icon: '📋', end: false },
+    { to: '/admin?tab=test',   label: 'أدوات التيست',   icon: '🧪', end: false },
 ];
 
 const developerLinks = [
-    { to: '/developer', label: 'لوحة المطور', Icon: Wrench, end: true },
+    { to: '/developer', label: 'لوحة المطور', icon: '⚙️', end: true },
 ];
 
 const managerLinks = [
-    { to: '/manager', label: 'مراجعة الوثائق', Icon: Search, end: true },
+    { to: '/manager', label: 'مراجعة الوثائق', icon: '🔍', end: true },
 ];
 
 const accountLinks = [
-    { to: '/settings/2fa', label: 'المصادقة الثنائية', Icon: Settings },
+    { to: '/settings/2fa', label: 'المصادقة الثنائية', icon: '🔐' },
 ];
 
-const roleConfig = {
-    developer: { label: 'مطور النظام', color: 'bg-violet-500' },
-    admin:     { label: 'مدير النظام', color: 'bg-amber-500' },
-    manager:   { label: 'مراجع وثائق', color: 'bg-teal-500' },
-    user:      { label: 'مستخدم',      color: 'bg-slate-500' },
-};
-
-const NavItem = ({ to, label, Icon, end, onNavigate }) => (
+const NavItem = ({ to, label, icon, end, onNavigate }) => (
     <NavLink
         to={to}
         end={end}
         onClick={onNavigate}
         className={({ isActive }) =>
-            `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+            `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors ${
                 isActive
-                    ? 'bg-white/15 text-white shadow-sm'
-                    : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                    ? 'bg-white text-indigo-900 font-semibold'
+                    : 'text-indigo-200 hover:bg-indigo-800 hover:text-white'
             }`
         }
     >
-        <span className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 shrink-0">
-            <Icon size={16} />
-        </span>
+        <span className="text-base">{icon}</span>
         <span>{label}</span>
     </NavLink>
 );
 
 const SectionLabel = ({ children }) => (
-    <p className="text-slate-500 text-[10px] px-3 pt-4 pb-1.5 uppercase tracking-widest font-semibold">{children}</p>
+    <p className="text-indigo-400 text-xs px-4 pt-3 pb-1 uppercase tracking-wider">{children}</p>
 );
 
 const SidebarContent = ({ onNavigate }) => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
-    const role = user?.role || 'user';
-    const isAdmin     = role === 'admin';
-    const isDeveloper = role === 'developer';
-    const isManager   = role === 'manager';
-    const cfg = roleConfig[role] || roleConfig.user;
+    const isAdmin     = user?.role === 'admin';
+    const isDeveloper = user?.role === 'developer';
+    const isManager   = user?.role === 'manager';
 
     const handleLogout = async () => {
         await logout();
@@ -87,32 +71,24 @@ const SidebarContent = ({ onNavigate }) => {
                 : isAdmin     ? adminLinks
                 : userLinks;
 
-    const sectionLabel = isDeveloper ? 'الإدارة'
-                       : isManager   ? 'المراجعة'
-                       : isAdmin     ? 'الإدارة'
+    const sectionLabel = isDeveloper || isAdmin ? 'الإدارة'
+                       : isManager ? 'المراجعة'
                        : 'القائمة';
 
     return (
         <div className="flex flex-col h-full">
             {/* Brand */}
-            <div className="px-5 py-5 border-b border-slate-800 shrink-0">
-                <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0">
-                        <ScrollText size={18} />
-                    </div>
-                    <div>
-                        <h1 className="text-base font-bold tracking-wide leading-none">وصيّة</h1>
-                        <p className="text-slate-400 text-[11px] mt-0.5">
-                            {isAdmin || isDeveloper ? 'لوحة الإدارة'
-                            : isManager             ? 'مراجعة الوثائق'
-                            : 'Digital Will System'}
-                        </p>
-                    </div>
-                </div>
+            <div className="p-5 border-b border-indigo-700 shrink-0">
+                <h1 className="text-2xl font-bold tracking-wide">وصيّة</h1>
+                <p className="text-indigo-300 text-xs mt-1">
+                    {isAdmin || isDeveloper ? 'لوحة الإدارة'
+                    : isManager             ? 'مراجعة الوثائق'
+                    : 'Digital Will System'}
+                </p>
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
+            <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
                 <SectionLabel>{sectionLabel}</SectionLabel>
                 {links.map(l => <NavItem key={l.to} {...l} onNavigate={onNavigate} />)}
                 <SectionLabel>الحساب</SectionLabel>
@@ -120,28 +96,26 @@ const SidebarContent = ({ onNavigate }) => {
             </nav>
 
             {/* User info + logout */}
-            <div className="p-4 border-t border-slate-800 shrink-0">
-                <div className="flex items-center gap-3 mb-3">
-                    <div className="w-9 h-9 rounded-full bg-indigo-600/30 flex items-center justify-center shrink-0 text-indigo-300 font-bold text-sm">
-                        {user?.full_name?.charAt(0) || 'U'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-white text-sm truncate leading-none">{user?.full_name}</p>
-                        <p className="text-slate-400 text-[11px] truncate mt-0.5">{user?.email}</p>
-                    </div>
-                </div>
-                <div className="flex items-center justify-between">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold text-white ${cfg.color}`}>
-                        {cfg.label}
+            <div className="p-4 border-t border-indigo-700 shrink-0">
+                <div className="mb-3">
+                    <p className="font-semibold text-white text-sm truncate">{user?.full_name}</p>
+                    <p className="text-indigo-300 text-xs truncate mt-0.5">{user?.email}</p>
+                    <span className={`inline-block mt-1.5 px-2 py-0.5 rounded text-xs font-medium ${
+                        isDeveloper ? 'bg-purple-600 text-white'
+                        : isAdmin   ? 'bg-amber-500  text-white'
+                        : isManager ? 'bg-teal-600   text-white'
+                        : 'bg-indigo-700 text-indigo-200'
+                    }`}>
+                        {isDeveloper ? 'مدير النظام' : isAdmin ? 'مدير النظام' : isManager ? 'مراجع وثائق' : 'مستخدم'}
                     </span>
-                    <button
-                        onClick={handleLogout}
-                        className="flex items-center gap-1.5 text-slate-400 hover:text-red-400 transition-colors text-xs"
-                    >
-                        <LogOut size={13} />
-                        <span>خروج</span>
-                    </button>
                 </div>
+                <button
+                    onClick={handleLogout}
+                    className="w-full text-xs text-indigo-300 hover:text-white transition-colors text-right flex items-center gap-2"
+                >
+                    <span>→</span>
+                    <span>تسجيل الخروج</span>
+                </button>
             </div>
         </div>
     );
@@ -151,41 +125,31 @@ const Sidebar = () => {
     const { isOpen, close } = useSidebar();
     const location = useLocation();
 
-    // أغلق الـ drawer لما تتنقل على موبايل
     useEffect(() => {
         close();
     }, [location.pathname, location.search]);
 
     return (
         <>
-            {/* ── Desktop: sidebar ثابتة ── */}
-            <aside className="hidden lg:flex w-64 min-h-screen bg-slate-900 text-white flex-col shrink-0 border-l border-slate-800">
+            {/* Desktop: fixed sidebar */}
+            <aside className="hidden lg:flex w-60 min-h-screen bg-indigo-900 text-white flex-col shrink-0">
                 <SidebarContent />
             </aside>
 
-            {/* ── Mobile: overlay + drawer ── */}
-            {/* Overlay */}
+            {/* Mobile: overlay */}
             <div
-                className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 lg:hidden ${
+                className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 lg:hidden ${
                     isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
                 }`}
                 onClick={close}
             />
 
-            {/* Drawer — يجي من اليمين (RTL) */}
+            {/* Mobile: drawer from right (RTL) */}
             <aside
-                className={`fixed top-0 right-0 z-50 h-full w-72 bg-slate-900 text-white flex flex-col shadow-2xl
+                className={`fixed top-0 right-0 z-50 h-full w-64 bg-indigo-900 text-white flex flex-col shadow-2xl
                     transition-transform duration-300 ease-in-out lg:hidden
                     ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
             >
-                {/* زرار الإغلاق */}
-                <button
-                    onClick={close}
-                    className="absolute top-4 left-4 w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-all"
-                >
-                    <X size={16} />
-                </button>
-
                 <SidebarContent onNavigate={close} />
             </aside>
         </>
