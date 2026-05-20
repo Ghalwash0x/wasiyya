@@ -570,6 +570,8 @@ CREATE INDEX idx_audit_user_id      ON audit_logs(user_id);
 
 ## 🚀 Getting Started
 
+> **أوامر التشغيل الكاملة (عربي):** [docs/RUN.md](docs/RUN.md) — Docker، DB، HTTPS، والتشغيل اليومي.
+
 ### Prerequisites
 
 | Requirement | Version |
