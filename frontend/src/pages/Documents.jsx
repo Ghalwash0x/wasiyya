@@ -128,7 +128,7 @@ const Documents = () => {
     if (!will) return (
         <div className="flex min-h-screen">
             <Sidebar />
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 min-w-0 flex flex-col">
                 <Navbar title="الوثائق" />
                 <div className="flex-1 flex items-center justify-center text-gray-500">
                     يجب إنشاء وصية أولاً — <a href="/will" className="text-indigo-600 mr-1">إنشاء وصية</a>
@@ -140,9 +140,9 @@ const Documents = () => {
     return (
         <div className="flex min-h-screen">
             <Sidebar />
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 min-w-0 flex flex-col">
                 <Navbar title="الوثائق" />
-                <main className="flex-1 p-6">
+                <main className="flex-1 p-4 lg:p-6">
 
                     <div className="flex justify-between items-center mb-4">
                         <p className="text-gray-600 text-sm">{documents.length} وثيقة — مشفّرة بـ AES-256-GCM</p>

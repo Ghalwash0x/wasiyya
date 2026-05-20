@@ -44,7 +44,7 @@ const Beneficiaries = () => {
     if (!will) return (
         <div className="flex min-h-screen">
             <Sidebar />
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 min-w-0 flex flex-col">
                 <Navbar title="الوصيّون" />
                 <div className="flex-1 flex items-center justify-center text-gray-500">
                     يجب إنشاء وصية أولاً — <a href="/will" className="text-indigo-600 mr-1">إنشاء وصية</a>
@@ -56,9 +56,9 @@ const Beneficiaries = () => {
     return (
         <div className="flex min-h-screen">
             <Sidebar />
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 min-w-0 flex flex-col">
                 <Navbar title="الوصيّون" />
-                <main className="flex-1 p-6">
+                <main className="flex-1 p-4 lg:p-6">
                     <div className="flex justify-between items-center mb-6">
                         <p className="text-gray-600 text-sm">{beneficiaries.length} وصي مسجل</p>
                         <button onClick={() => setShowForm(!showForm)} className="btn-primary">

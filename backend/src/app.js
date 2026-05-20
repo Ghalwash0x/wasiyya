@@ -31,8 +31,8 @@ app.use(cors({
 
 // Global limiter — all routes
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 300,
+    windowMs: 30 * 60 * 1000,
+    max: 500,
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, message: 'طلبات كثيرة جداً، حاول لاحقاً' }

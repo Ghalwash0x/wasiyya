@@ -32,9 +32,10 @@
 
 <p>
   <a href="#-getting-started"><strong>Quick Start</strong></a> ·
+  <a href="CHANGELOG_UPDATES.md"><strong>Changelog</strong></a> ·
   <a href="#-api-reference"><strong>API Reference</strong></a> ·
   <a href="#-security"><strong>Security</strong></a> ·
-  <a href="#-roadmap"><strong>Roadmap</strong></a>
+  <a href="#-contributors"><strong>Contributors</strong></a>
 </p>
 
 </div>
@@ -60,7 +61,9 @@
 - [Testing](#-testing)
 - [Roadmap](#-roadmap)
 - [Contributing](#-contributing)
+- [Contributors](#-contributors)
 - [Team](#-team)
+- [Changelog](#-changelog)
 - [License](#-license)
 
 ---
@@ -99,8 +102,9 @@
 - Passwords hashed with **bcrypt** (cost factor 12); legacy plaintext auto-migrated on first login
 - JWT-based sessions (24-hour expiry)
 - **Two-Factor Authentication (TOTP)** — compatible with Google Authenticator and Authy
-- **OAuth login** — Sign in with Google or GitHub (existing accounts only — no auto-registration)
-- **OAuth sign-up** — Register via Google or GitHub from the `/register` page; new emails are redirected to `/register?oauth_token=…` for name and optional password, then linked to the provider
+- **OAuth login** — Sign in with Google or GitHub (existing accounts only — no auto-registration on login)
+- **OAuth sign-up** — Register via Google or GitHub from `/register` (`?mode=register`); new emails go to `/register?oauth_token=…` to complete name and optional password, then the account is linked to the provider
+- **2FA applies to OAuth login** — if the account has 2FA enabled, a TOTP code is required after provider authorization
 
 </details>
 
@@ -127,7 +131,11 @@ Store structured records with the following types:
 | `info` | General important information |
 | `note` | Personal messages or instructions |
 
-All asset content is **AES-256-GCM encrypted** using a per-user key before storage. The browser decrypts using the Web Crypto API — plaintext is never sent over the API. Assets created before encryption was introduced (`iv = NULL`) are displayed as legacy plaintext until re-saved.
+- **Content encrypted at rest** (AES-256-GCM) in MySQL — ciphertext in `content`, IV in `iv` (`ivHex:authTagHex`)
+- **Per-user encryption key** — derived from `AES_SECRET_KEY` + `userId`; only the account owner can decrypt via `GET /api/auth/wallet-key`
+- **Client-side decryption** via Web Crypto API — plaintext never sent over the API, never stored unencrypted in the DB
+- Title remains unencrypted (display label only); reveal/hide toggle in the UI
+- Assets without `iv` (`null`) were created before encryption was introduced; displayed as-is until re-saved
 
 </details>
 
@@ -581,10 +589,23 @@ cd wasiyya
 
 **2. Set up the database**
 
+**Option A — XAMPP**
+
 1. Start XAMPP → click **Start** for MySQL
 2. Open `http://localhost/phpmyadmin`
 3. Create a new database named `wasiyya`
 4. Select it → **Import** tab → choose `database/schema_mysql.sql` → **Go**
+
+**Option B — Docker (MySQL + phpMyAdmin)**
+
+```bash
+# MySQL on port 3306, phpMyAdmin on http://localhost:8081
+docker start wasiyya-mysql wasiyya-phpmyadmin
+# Import schema_mysql.sql via phpMyAdmin or:
+# docker exec -i wasiyya-mysql mysql -uroot wasiyya < database/schema_mysql.sql
+```
+
+Login to phpMyAdmin: user `root`, empty password (default).
 
 **3. Configure the backend**
 
@@ -805,16 +826,18 @@ When `requires2FA: true`, proceed to `POST /auth/2fa/verify` with the `tempToken
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/auth/google` | — | Redirect to Google consent screen |
-| `GET` | `/auth/github` | — | Redirect to GitHub authorization |
-| `GET` | `/auth/oauth/pending?token=` | — | Fetch name + email stored from OAuth provider |
-| `POST` | `/auth/register/oauth` | — | Complete new-account creation; links `oauth_provider` + `oauth_id` |
+| `GET` | `/auth/google` | — | Login via Google; append `?mode=register` from `/register` page |
+| `GET` | `/auth/github` | — | Login via GitHub; append `?mode=register` from `/register` page |
+| `GET` | `/auth/oauth/pending?token=` | — | OAuth sign-up — fetch pre-filled email + name |
+| `POST` | `/auth/register/oauth` | — | Complete sign-up `{ oauth_token, full_name, password? }` — links `oauth_provider` + `oauth_id` |
 
-**Sign-in (existing account):** redirects to `FRONTEND_URL/login?token=<jwt>&role=<role>`  
-**Sign-in with 2FA:** redirects to `FRONTEND_URL/login?requires2FA=1&tempToken=<tempToken>` — Login.jsx catches this and shows the OTP screen  
-**Sign-up from `/register` (`?mode=register`):** new email → redirects to `FRONTEND_URL/register?oauth_token=<token>` for profile completion; existing email → `FRONTEND_URL/login?error=account_not_found`  
-**Sign-in with unknown email:** redirects to `FRONTEND_URL/login?error=account_not_found`  
-**Provider not configured:** redirects to `FRONTEND_URL/login?error=oauth_not_configured`
+**Login success:** `FRONTEND_URL/login?token=<jwt>&role=<role>`  
+**Login + 2FA enabled:** `FRONTEND_URL/login?requires2FA=1&tempToken=<jwt>` — Login.jsx shows OTP screen  
+**Sign-up new email:** `FRONTEND_URL/register?oauth_token=<jwt>` for profile completion  
+**Sign-in with unknown email:** `FRONTEND_URL/login?error=account_not_found`  
+**Provider not configured:** `FRONTEND_URL/login?error=oauth_not_configured`
+
+> **GitHub OAuth App:** set callback URL to `{BACKEND_URL}/api/auth/github/callback` — Device Flow not required.
 
 ---
 
@@ -850,19 +873,31 @@ Standard profile fetch and logout (both require JWT).
 
 ### 💼 Assets — `/api/assets`
 
+> Requires authentication, role `user`. Will ownership verified on every request.  
+> Responses return **`content_encrypted`** + **`iv`** — decrypt in the browser using `GET /auth/wallet-key`.
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/assets/:willId` | List all assets (returns `content_encrypted` + `iv`; no plaintext) |
-| `POST` | `/assets` | Add an asset (content is AES-256-GCM encrypted server-side before storage) |
+| `GET` | `/assets/:willId` | List assets — returns `content` (ciphertext) + `iv`; no plaintext |
+| `POST` | `/assets` | Add asset — server encrypts `content` with AES-256-GCM before storage |
+| `PUT` | `/assets/:id` | Update title / type / content (re-encrypts on save) |
 | `DELETE` | `/assets/:id` | Delete an asset |
 
 ```json
-// POST /assets — request body
+// POST /assets — request body (plaintext content; stored encrypted)
 {
   "will_id": "uuid",
   "asset_type": "bank",
   "title": "HSBC Savings Account",
   "content": "Account: 1234567890\nIBAN: GB12HSBC..."
+}
+
+// GET /assets/:willId — response item (excerpt)
+{
+  "id": "uuid",
+  "title": "HSBC Savings Account",
+  "content_encrypted": "k8J3mP9xQ2...",
+  "iv": "a3f1c9d2e4b1:8e2f1a0b9c3d"
 }
 ```
 
@@ -1011,8 +1046,8 @@ Every verification is recorded in `audit_logs` as `MANAGER_VERIFY_DOC`.
 | **Password Hashing** | bcrypt cost-12; plaintext passwords auto-migrated on first login |
 | **JWT Authentication** | HS256, 24h expiry, verified on every request |
 | **Two-Factor Auth (TOTP)** | speakeasy — compatible with Google Authenticator and Authy |
-| **OAuth (Google + GitHub)** | Passport strategies; find-only — no auto-registration. Login matches by `oauth_id` or email. Sign-up uses a separate profile-completion flow from `/register`. |
-| **Asset Content Encryption** | AES-256-GCM; per-user key (`HMAC-SHA256(AES_SECRET_KEY, userId)`); decrypted in-browser via Web Crypto API |
+| **OAuth (Google + GitHub)** | Login: find-only by `oauth_id` or email — no auto-registration. Sign-up via `/register?mode=register` with profile completion. 2FA applies after OAuth when enabled. |
+| **Asset Content Encryption** | AES-256-GCM; per-user key (`HMAC-SHA256(AES_SECRET_KEY, userId)`); ciphertext in DB; client-side decrypt via Web Crypto API |
 | **Document Encryption** | AES-256-GCM at rest; transparent decryption on download |
 | **Document Integrity** | SHA-256 hash stored at upload (`documents.sha256_hash`) |
 | **Digital Signatures** | RSA-2048 auto-generated key pair; each document signed at upload |
@@ -1064,22 +1099,20 @@ Every verification is recorded in `audit_logs` as `MANAGER_VERIFY_DOC`.
 <details>
 <summary><strong>OAuth Flow — Sign-in (Google / GitHub)</strong></summary>
 
+**Login** (`/api/auth/google` or `/github`):
+
 ```
-1. User clicks OAuth button on /login  →  browser navigates to /api/auth/google
-2. requireOAuth guard checks passport._strategies — if provider not configured,
-   redirects immediately to FRONTEND_URL/login?error=oauth_not_configured
+1. User clicks OAuth button on /login  →  /api/auth/google
+2. requireOAuth guard: if provider not configured → FRONTEND_URL/login?error=oauth_not_configured
 3. Passport redirects to provider consent screen
-4. Provider redirects to /api/auth/google/callback
-5. findOAuthUser:
-   a. Lookup by oauth_provider + oauth_id (already linked)
-   b. OR lookup by email only (links the provider to the existing account)
-   c. If no match  →  failureRedirect: FRONTEND_URL/login?error=account_not_found
-6. If two_fa_enabled = 1  →  issue tempToken (5 min) and redirect to:
-   FRONTEND_URL/login?requires2FA=1&tempToken=<tempToken>
-7. Otherwise  →  sign full JWT and redirect to:
+4. Provider callbacks to /api/auth/google/callback
+5. findOAuthUser: lookup by oauth_id → else by email (links provider if matched)
+6. No match  →  failureRedirect FRONTEND_URL/login?error=account_not_found
+7. If two_fa_enabled = 1  →  issue tempToken (5 min), redirect:
+   FRONTEND_URL/login?requires2FA=1&tempToken=<jwt>
+8. Otherwise  →  sign full JWT, redirect:
    FRONTEND_URL/login?token=<jwt>&role=<role>
-8. Login.jsx useEffect reads URL params, calls /api/auth/me, stores token
-   (if requires2FA, shows OTP input using same 2FA flow as standard login)
+9. Login.jsx useEffect reads URL params; if requires2FA shows OTP screen
 ```
 
 </details>
@@ -1088,16 +1121,16 @@ Every verification is recorded in `audit_logs` as `MANAGER_VERIFY_DOC`.
 <summary><strong>OAuth Flow — Sign-up (Google / GitHub)</strong></summary>
 
 ```
-1. User clicks OAuth button on /register  →  navigates to /api/auth/google?mode=register
+1. User clicks OAuth on /register  →  /api/auth/google?mode=register
 2. Passport redirects to provider consent screen
-3. Provider redirects to callback
-4. If email is already registered  →  redirect to FRONTEND_URL/login?error=account_not_found
-5. If email is new  →  store profile in a short-lived token, redirect to:
-   FRONTEND_URL/register?oauth_token=<token>
-6. Register.jsx detects oauth_token → calls GET /api/auth/oauth/pending?token=<token>
-   to pre-fill name + email; user completes the form and optionally sets a password
-7. POST /api/auth/register/oauth  →  creates account, links oauth_provider + oauth_id
-8. Server signs JWT  →  redirects to role-appropriate page
+3. Provider callback
+4. If email already registered  →  FRONTEND_URL/login?error=account_not_found
+5. Else issue short-lived oauth_token (15 min), redirect:
+   FRONTEND_URL/register?oauth_token=<jwt>
+6. Register.jsx calls GET /api/auth/oauth/pending?token= to pre-fill name + email
+7. User completes form, optionally sets a password
+8. POST /api/auth/register/oauth  →  creates account, links oauth_provider + oauth_id
+9. Server signs JWT  →  redirects to role-appropriate page
 ```
 
 </details>
@@ -1123,6 +1156,7 @@ Every verification is recorded in `audit_logs` as `MANAGER_VERIFY_DOC`.
 | Limitation | Notes |
 |------------|-------|
 | JWT not invalidatable before expiry | Refresh token / blacklist pattern not yet implemented |
+| Asset decryption key via API | Owner must be logged in; key is fetched per-session, not cached in localStorage |
 | No email verification | Users can register with any email |
 | No password reset flow | No forgot-password / reset-via-email flow |
 
@@ -1328,12 +1362,13 @@ Set `TIME_UNIT=minutes` in `.env` and restart the backend.
 - [x] SHA-256 document integrity verification
 - [x] RSA-2048 digital signatures — auto-generated key pair
 - [x] TOTP two-factor authentication (Google Authenticator / Authy)
-- [x] Google + GitHub OAuth login (find-only — no auto-registration)
-- [x] OAuth sign-up with profile completion step from `/register`
-- [x] OAuth + 2FA support (tempToken flow for existing accounts with 2FA enabled)
-- [x] AES-256-GCM asset content encryption — per-user key, browser decryption via Web Crypto API
+- [x] Google + GitHub OAuth login (find-only — no auto-registration on login)
+- [x] OAuth sign-up with profile completion step from `/register` (`?mode=register`)
+- [x] OAuth + 2FA support — TOTP required after OAuth when 2FA is enabled
+- [x] AES-256-GCM asset content encryption — per-user key, client-side decrypt via Web Crypto API
 - [x] Beneficiary access gated on `wills.status = 'triggered'`
 - [x] Mobile-responsive sidebar (SidebarContext, overlay, lucide-react icons)
+- [x] Dashboard stats cards + check-in progress bar UI improvements
 - [x] HTTP → HTTPS automatic redirect
 - [x] Manager role — document integrity reviewer (verify-only, no download, no plaintext)
 - [x] Zero-Trust admin model — admin sees metadata only; tokens, content, and encryption keys never exposed
@@ -1348,6 +1383,7 @@ Set `TIME_UNIT=minutes` in `.env` and restart the backend.
 - [ ] Email verification on registration
 - [ ] Password reset via email
 - [ ] Multi-language support (Arabic + English)
+- [ ] Further mobile UI polish
 - [ ] Notification preferences (frequency, channel)
 - [ ] Will versioning and history
 - [ ] Legal advisor role (limited read-only access)
@@ -1378,6 +1414,29 @@ Contributions are welcome! Here's how to get started:
 - Do not commit `.env` files or credentials
 - Do not modify `database/schema_mysql.sql` without a migration plan
 
+**Appear on GitHub Contributors:** use a GitHub-linked email in commits:
+
+```bash
+git config user.name "Your Name"
+git config user.email "your-email@example.com"   # same as GitHub account
+```
+
+---
+
+## 👤 Contributors
+
+<a href="https://github.com/omar0y/wasiyya/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=omar0y/wasiyya" alt="Contributors" />
+</a>
+
+| Name | GitHub | Role |
+|------|--------|------|
+| عمر عبدالعال سعد — Omar Abdelaal Saad | [@omar0y](https://github.com/omar0y) | Full-Stack Lead |
+| محمد أسامه محمد — Mohammed Osama Mohammed | — | Backend & Database |
+| مصطفى علي مصطفى — Mustafa Ali Mustafa | — | Frontend & UI/UX |
+
+> Commits must use an email [linked to your GitHub account](https://github.com/settings/emails) to appear in the graph above.
+
 ---
 
 ## 👥 Team
@@ -1390,6 +1449,14 @@ Contributions are welcome! Here's how to get started:
 
 **Supervisor:** Faculty of Engineering — Software Engineering Department  
 **Academic Year:** 2025 / 2026
+
+---
+
+## 📋 Changelog
+
+Recent session updates (OAuth register, 2FA + OAuth, encrypted assets, UI) are documented in:
+
+**[CHANGELOG_UPDATES.md](./CHANGELOG_UPDATES.md)**
 
 ---
 

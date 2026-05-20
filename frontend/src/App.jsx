@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SidebarProvider } from './context/SidebarContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import RoleRoute      from './components/RoleRoute';
 
@@ -32,6 +33,7 @@ const SmartRedirect = () => {
 
 const App = () => (
     <AuthProvider>
+        <SidebarProvider>
         <BrowserRouter>
             <Routes>
                 {/* Public */}
@@ -81,6 +83,7 @@ const App = () => (
                 <Route path="*"  element={<NotFound />} />
             </Routes>
         </BrowserRouter>
+        </SidebarProvider>
     </AuthProvider>
 );
 

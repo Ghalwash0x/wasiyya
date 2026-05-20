@@ -131,6 +131,7 @@ const clear2FA = async (req, res) => {
         await pool.query(
             'UPDATE users SET two_fa_enabled = 0, two_fa_secret = NULL WHERE id = $1', [id]
         );
+        await pool.query('DELETE FROM passkeys WHERE user_id = $1', [id]);
         try {
             await pool.query(
                 'INSERT INTO audit_logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)',

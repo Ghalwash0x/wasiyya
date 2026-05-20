@@ -37,9 +37,9 @@ const Verification = () => {
     return (
         <div className="flex min-h-screen">
             <Sidebar />
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 min-w-0 flex flex-col">
                 <Navbar title="تجديد الوجود (Dead Man's Switch)" />
-                <main className="flex-1 p-6 max-w-2xl">
+                <main className="flex-1 p-4 lg:p-6 max-w-2xl">
                     {msg && (
                         <div className={`mb-4 px-4 py-3 rounded text-sm ${msg.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
                             {msg}
