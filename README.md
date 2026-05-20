@@ -32,9 +32,10 @@
 
 <p>
   <a href="#-getting-started"><strong>Quick Start</strong></a> ·
+  <a href="CHANGELOG_UPDATES.md"><strong>Changelog</strong></a> ·
   <a href="#-api-reference"><strong>API Reference</strong></a> ·
   <a href="#-security"><strong>Security</strong></a> ·
-  <a href="#-roadmap"><strong>Roadmap</strong></a>
+  <a href="#-contributors"><strong>Contributors</strong></a>
 </p>
 
 </div>
@@ -60,7 +61,9 @@
 - [Testing](#-testing)
 - [Roadmap](#-roadmap)
 - [Contributing](#-contributing)
+- [Contributors](#-contributors)
 - [Team](#-team)
+- [Changelog](#-changelog)
 - [License](#-license)
 
 ---
@@ -99,7 +102,9 @@
 - Passwords hashed with **bcrypt** (cost factor 12); legacy plaintext auto-migrated on first login
 - JWT-based sessions (24-hour expiry)
 - **Two-Factor Authentication (TOTP)** — compatible with Google Authenticator and Authy
-- **OAuth login** — Sign in with Google or GitHub (no password required)
+- **OAuth (Google + GitHub)** — Sign in or **register** via OAuth (`?mode=register` on `/register`)
+- After OAuth registration, complete profile (name; optional password) on the register form
+- **2FA applies to OAuth login** — if enabled, a TOTP code is required after provider authorization
 
 </details>
 
@@ -125,6 +130,11 @@ Store structured records with the following types:
 | `password` | Passwords and PINs |
 | `info` | General important information |
 | `note` | Personal messages or instructions |
+
+- **Content encrypted at rest** (AES-256-GCM) in MySQL — ciphertext in `content`, IV in `iv` (`ivHex:authTagHex`)
+- **Per-user encryption key** — derived from `AES_SECRET_KEY` + `userId`; only the account owner can decrypt via `GET /api/auth/wallet-key`
+- **Client-side decryption** in the browser (Web Crypto API) — plaintext never stored unencrypted in the DB
+- Title remains unencrypted (display label only); reveal/hide toggle in the UI
 
 </details>
 
@@ -567,10 +577,23 @@ cd wasiyya
 
 **2. Set up the database**
 
+**Option A — XAMPP**
+
 1. Start XAMPP → click **Start** for MySQL
 2. Open `http://localhost/phpmyadmin`
 3. Create a new database named `wasiyya`
 4. Select it → **Import** tab → choose `database/schema_mysql.sql` → **Go**
+
+**Option B — Docker (MySQL + phpMyAdmin)**
+
+```bash
+# MySQL on port 3306, phpMyAdmin on http://localhost:8081
+docker start wasiyya-mysql wasiyya-phpmyadmin
+# Import schema_mysql.sql via phpMyAdmin or:
+# docker exec -i wasiyya-mysql mysql -uroot wasiyya < database/schema_mysql.sql
+```
+
+Login to phpMyAdmin: user `root`, empty password (default).
 
 **3. Configure the backend**
 
@@ -791,11 +814,18 @@ When `requires2FA: true`, proceed to `POST /auth/2fa/verify` with the `tempToken
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/auth/google` | Redirect to Google consent screen |
-| `GET` | `/auth/github` | Redirect to GitHub authorization |
+| `GET` | `/auth/google` | Login via Google (`?mode=register` from register page) |
+| `GET` | `/auth/github` | Login via GitHub (`?mode=register` from register page) |
+| `GET` | `/auth/oauth/pending?token=` | OAuth registration — fetch pre-filled email/name |
+| `POST` | `/auth/register/oauth` | Complete OAuth registration `{ oauth_token, full_name, password? }` |
+| `GET` | `/auth/wallet-key` | Asset decryption key (JWT, role `user` only) |
 
-On success: redirects to `FRONTEND_URL/login?token=<jwt>&role=<role>`  
-On failure: redirects to `FRONTEND_URL/login?error=1`
+**Login success:** `FRONTEND_URL/login?token=<jwt>&role=<role>`  
+**Login + 2FA:** `FRONTEND_URL/login?requires2FA=1&tempToken=<jwt>`  
+**Register (new OAuth user):** `FRONTEND_URL/register?oauth_token=<jwt>`  
+**Failures:** `?error=account_not_found` · `oauth_not_configured` · `oauth_failed`
+
+**GitHub OAuth App callback URL:** `{BACKEND_URL}/api/auth/github/callback` (e.g. `http://localhost:3001/api/auth/github/callback`) — **Device Flow not required**
 
 ---
 
@@ -830,19 +860,31 @@ Standard profile fetch and logout (both require JWT).
 
 ### 💼 Assets — `/api/assets`
 
+> Requires authentication, role `user`. Will ownership verified on every request.  
+> Responses return **`content_encrypted`** + **`iv`** — decrypt in the browser using `GET /auth/wallet-key`.
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/assets/:willId` | List all assets |
-| `POST` | `/assets` | Add an asset |
+| `GET` | `/assets/:willId` | List assets (encrypted content) |
+| `POST` | `/assets` | Add asset (server encrypts `content` before save) |
+| `PUT` | `/assets/:id` | Update title/type/content |
 | `DELETE` | `/assets/:id` | Delete an asset |
 
 ```json
-// POST /assets — request body
+// POST /assets — request body (plaintext content; stored encrypted)
 {
   "will_id": "uuid",
   "asset_type": "bank",
   "title": "HSBC Savings Account",
   "content": "Account: 1234567890\nIBAN: GB12HSBC..."
+}
+
+// GET /assets/:willId — response item (excerpt)
+{
+  "id": "uuid",
+  "title": "HSBC Savings Account",
+  "content_encrypted": "k8J3mP9xQ2...",
+  "iv": "a3f1c9d2e4b1:8e2f1a0b9c3d"
 }
 ```
 
@@ -963,7 +1005,8 @@ Error codes: `403` token expired or will not triggered · `404` token not found
 | **Password Hashing** | bcrypt cost-12; plaintext passwords auto-migrated on first login |
 | **JWT Authentication** | HS256, 24h expiry, verified on every request |
 | **Two-Factor Auth (TOTP)** | speakeasy — compatible with Google Authenticator and Authy |
-| **OAuth (Google + GitHub)** | Passport strategies; find-or-create by `oauth_id` or email match |
+| **OAuth (Google + GitHub)** | Login + register (`state=register`); link by email; 2FA after OAuth when enabled |
+| **Asset Encryption** | AES-256-GCM per-user key; ciphertext in DB; client-side decrypt for owner |
 | **Document Encryption** | AES-256-GCM at rest; transparent decryption on download |
 | **Document Integrity** | SHA-256 hash stored at upload (`documents.sha256_hash`) |
 | **Digital Signatures** | RSA-2048 auto-generated key pair; each document signed at upload |
@@ -1012,16 +1055,24 @@ Error codes: `403` token expired or will not triggered · `404` token not found
 <details>
 <summary><strong>OAuth Flow (Google / GitHub)</strong></summary>
 
+**Login** (`/api/auth/google` or `/github`):
+
 ```
-1. User clicks OAuth button  →  browser navigates to /api/auth/google
-2. Passport redirects to provider consent screen
-3. Provider redirects to /api/auth/google/callback
-4. findOrCreateOAuthUser:
-   a. Find existing account by oauth_provider + oauth_id
-   b. OR link to existing account by matching email
-   c. OR create new account with a random bcrypt password
-5. Server signs JWT  →  redirect to FRONTEND_URL/login?token=<jwt>&role=<role>
-6. Login.jsx useEffect reads URL params, calls /api/auth/me, stores token
+1. User clicks OAuth on /login  →  /api/auth/google?state=login
+2. Provider callback  →  find user by oauth_id or email (link if needed)
+3. If not found  →  redirect /login?error=account_not_found
+4. If two_fa_enabled  →  redirect /login?requires2FA=1&tempToken=...
+5. Else  →  redirect /login?token=<jwt>&role=<role>
+```
+
+**Register** (`/register` page uses `?mode=register`):
+
+```
+1. User clicks OAuth on /register  →  state=register
+2. If email already registered  →  /register?error=email_exists
+3. Else issue oauth_token (15 min)  →  /register?oauth_token=...
+4. User completes name (+ optional password)  →  POST /api/auth/register/oauth
+5. Account created with oauth_provider + oauth_id  →  JWT issued
 ```
 
 </details>
@@ -1044,7 +1095,7 @@ Error codes: `403` token expired or will not triggered · `404` token not found
 | Limitation | Notes |
 |------------|-------|
 | JWT not invalidatable before expiry | Refresh token / blacklist pattern not yet implemented |
-| Asset content not encrypted | `assets.iv` column reserved — encryption not yet applied |
+| Asset decryption key via API | Owner must be logged in; key is session-fetched, not stored in localStorage |
 | No email verification | Users can register with any email |
 | No password reset flow | No forgot-password / reset-via-email flow |
 
@@ -1245,16 +1296,19 @@ Set `TIME_UNIT=minutes` in `.env` and restart the backend.
 - [x] RSA-2048 digital signatures — auto-generated key pair
 - [x] TOTP two-factor authentication (Google Authenticator / Authy)
 - [x] Google + GitHub OAuth login
+- [x] Google + GitHub OAuth **registration** with profile completion
+- [x] OAuth login respects **2FA** when enabled
+- [x] AES-256-GCM **asset content** encryption at rest + client-side decrypt
+- [x] Responsive sidebar & dashboard UI improvements
 - [x] HTTP → HTTPS automatic redirect
 
 ### 🔜 Planned
 
-- [ ] AES-256-GCM encryption for asset content (`assets.iv` column ready)
 - [ ] Refresh token pattern (short-lived access + long-lived refresh)
 - [ ] Email verification on registration
 - [ ] Password reset via email
 - [ ] Multi-language support (Arabic + English)
-- [ ] Mobile-responsive UI improvements
+- [ ] Further mobile UI polish
 - [ ] Notification preferences (frequency, channel)
 - [ ] Will versioning and history
 - [ ] Legal advisor role (limited read-only access)
@@ -1285,6 +1339,29 @@ Contributions are welcome! Here's how to get started:
 - Do not commit `.env` files or credentials
 - Do not modify `database/schema_mysql.sql` without a migration plan
 
+**Appear on GitHub Contributors:** use a GitHub-linked email in commits:
+
+```bash
+git config user.name "Your Name"
+git config user.email "your-email@example.com"   # same as GitHub account
+```
+
+---
+
+## 👤 Contributors
+
+<a href="https://github.com/omar0y/wasiyya/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=omar0y/wasiyya" alt="Contributors" />
+</a>
+
+| Name | GitHub | Role |
+|------|--------|------|
+| عمر عبدالعال سعد — Omar Abdelaal Saad | [@omar0y](https://github.com/omar0y) | Full-Stack Lead |
+| محمد أسامه محمد — Mohammed Osama Mohammed | — | Backend & Database |
+| مصطفى علي مصطفى — Mustafa Ali Mustafa | — | Frontend & UI/UX |
+
+> Commits must use an email [linked to your GitHub account](https://github.com/settings/emails) to appear in the graph above.
+
 ---
 
 ## 👥 Team
@@ -1297,6 +1374,14 @@ Contributions are welcome! Here's how to get started:
 
 **Supervisor:** Faculty of Engineering — Software Engineering Department  
 **Academic Year:** 2025 / 2026
+
+---
+
+## 📋 Changelog
+
+Recent session updates (OAuth register, 2FA + OAuth, encrypted assets, UI) are documented in:
+
+**[CHANGELOG_UPDATES.md](./CHANGELOG_UPDATES.md)**
 
 ---
 
