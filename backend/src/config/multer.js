@@ -13,6 +13,8 @@ const ALLOWED_TYPES = [
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 ];
 
+const ALLOWED_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.txt', '.doc', '.docx']);
+
 const MAX_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024;
 
 const storage = multer.diskStorage({
@@ -35,7 +37,8 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-    if (ALLOWED_TYPES.includes(file.mimetype)) {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_TYPES.includes(file.mimetype) && ALLOWED_EXTENSIONS.has(ext)) {
         cb(null, true);
     } else {
         cb(new Error('نوع الملف غير مسموح. الأنواع المسموحة: PDF, JPG, PNG, TXT, DOC, DOCX'), false);

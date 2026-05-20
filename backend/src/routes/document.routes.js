@@ -10,7 +10,7 @@ const { authenticate } = require('../middleware/auth.middleware');
 const { authorize }    = require('../middleware/rbac.middleware');
 const upload = require('../config/multer');
 
-router.use(authenticate, authorize('user', 'manager'));
+router.use(authenticate, authorize('user'));
 
 router.post('/upload', upload.single('file'), uploadDocument);
 router.get('/download/:id', downloadDocument);

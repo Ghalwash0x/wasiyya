@@ -3,7 +3,7 @@ const { getMyWill, createWill, updateWill, deleteWill } = require('../controller
 const { authenticate } = require('../middleware/auth.middleware');
 const { authorize }    = require('../middleware/rbac.middleware');
 
-router.use(authenticate, authorize('user', 'manager'));
+router.use(authenticate, authorize('user'));
 
 router.get('/', getMyWill);
 router.post('/', createWill);

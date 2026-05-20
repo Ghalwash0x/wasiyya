@@ -26,7 +26,7 @@
 
 <p>
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/version-2.0.0-indigo?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/version-3.0.0-indigo?style=flat-square" alt="Version" />
   <img src="https://img.shields.io/badge/University%20Project-2026-orange?style=flat-square" alt="University" />
 </p>
 

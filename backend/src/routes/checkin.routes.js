@@ -3,7 +3,7 @@ const { doCheckin, getCheckinStatus } = require('../controllers/checkin.controll
 const { authenticate } = require('../middleware/auth.middleware');
 const { authorize }    = require('../middleware/rbac.middleware');
 
-router.use(authenticate, authorize('user', 'manager'));
+router.use(authenticate, authorize('user'));
 
 router.post('/', doCheckin);
 router.get('/status', getCheckinStatus);

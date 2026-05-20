@@ -11,8 +11,7 @@ const { authorize }    = require('../middleware/rbac.middleware');
 // Public — token-based access for beneficiaries
 router.get('/access/:token', getBeneficiaryAccess);
 
-// Protected routes (users and managers only)
-router.use(authenticate, authorize('user', 'manager'));
+router.use(authenticate, authorize('user'));
 router.get('/:willId', getBeneficiaries);
 router.post('/', addBeneficiary);
 router.delete('/:id', deleteBeneficiary);

@@ -136,7 +136,6 @@ const UsersTab = ({ users, setUsers }) => {
                                 <select value={u.role} onChange={e => changeRole(u.id, e.target.value)}
                                     className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white">
                                     <option value="user">مستخدم</option>
-                                    <option value="manager">مدير</option>
                                     <option value="admin">أدمن</option>
                                 </select>
                             </td>

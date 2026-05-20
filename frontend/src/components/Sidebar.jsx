@@ -116,7 +116,7 @@ const Sidebar = () => {
                         ${isDeveloper ? 'bg-purple-600 text-white'
                         : isAdmin     ? 'bg-amber-500 text-white'
                         : 'bg-indigo-700 text-indigo-200'}`}>
-                        {isDeveloper ? 'مطور النظام' : isAdmin ? 'مدير النظام' : user?.role === 'manager' ? 'مدير' : 'مستخدم'}
+                        {isDeveloper ? 'مطور النظام' : isAdmin ? 'مدير النظام' : 'مستخدم'}
                     </span>
                 </div>
                 <button

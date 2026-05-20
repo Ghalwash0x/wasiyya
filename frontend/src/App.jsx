@@ -16,6 +16,7 @@ import AdminPanel       from './pages/AdminPanel';
 import DeveloperPanel   from './pages/DeveloperPanel';
 import BeneficiaryAccess from './pages/BeneficiaryAccess';
 import TwoFactorSetup  from './pages/TwoFactorSetup';
+import NotFound        from './pages/NotFound';
 
 // Redirect to correct home based on role
 const SmartRedirect = () => {
@@ -65,7 +66,7 @@ const App = () => (
 
                 {/* Smart redirect */}
                 <Route path="/"  element={<SmartRedirect />} />
-                <Route path="*"  element={<SmartRedirect />} />
+                <Route path="*"  element={<NotFound />} />
             </Routes>
         </BrowserRouter>
     </AuthProvider>

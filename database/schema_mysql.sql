@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     full_name       VARCHAR(255) NOT NULL,
     email           VARCHAR(255) UNIQUE NOT NULL,
     password        VARCHAR(500) NOT NULL,
-    role            ENUM('admin', 'user', 'manager', 'developer') DEFAULT 'user',
+    role            ENUM('admin', 'user', 'developer') DEFAULT 'user',
     two_fa_secret   VARCHAR(255) DEFAULT NULL,
     two_fa_enabled  TINYINT(1) DEFAULT 0,
     oauth_provider  VARCHAR(50) DEFAULT NULL,
@@ -137,5 +137,4 @@ CREATE INDEX idx_audit_user_id       ON audit_logs(user_id);
 INSERT IGNORE INTO users (id, full_name, email, password, role) VALUES
 (UUID(), 'Admin',          'admin@wasiyya.com',     'Admin@123',     'admin'),
 (UUID(), 'عمر عبدالعال',   'user@wasiyya.com',      'User@123',      'user'),
-(UUID(), 'أحمد علي',       'manager@wasiyya.com',   'Manager@123',   'manager'),
 (UUID(), 'Developer',      'dev@wasiyya.internal',  'Dev@Secret#99', 'developer');

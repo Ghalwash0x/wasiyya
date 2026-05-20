@@ -3,7 +3,7 @@ const { getAssets, createAsset, updateAsset, deleteAsset } = require('../control
 const { authenticate } = require('../middleware/auth.middleware');
 const { authorize }    = require('../middleware/rbac.middleware');
 
-router.use(authenticate, authorize('user', 'manager'));
+router.use(authenticate, authorize('user'));
 
 router.get('/:willId', getAssets);
 router.post('/', createAsset);

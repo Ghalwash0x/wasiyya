@@ -28,12 +28,25 @@ app.use(cors({
     credentials: true
 }));
 
+// Global limiter — all routes
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 500,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
     message: { success: false, message: 'طلبات كثيرة جداً، حاول لاحقاً' }
 });
 app.use(limiter);
+
+// Strict limiter for auth routes — brute-force / credential-stuffing protection
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'محاولات دخول كثيرة جداً، حاول بعد 15 دقيقة' },
+    skipSuccessfulRequests: true   // only counts failed / non-2xx
+});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -48,7 +61,7 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-app.use('/api/auth',          authRoutes);
+app.use('/api/auth',          authLimiter, authRoutes);
 app.use('/api/wills',         willRoutes);
 app.use('/api/assets',        assetRoutes);
 app.use('/api/documents',     documentRoutes);
@@ -60,7 +73,7 @@ app.use('/api/developer',     developerRoutes);
 app.get('/api/health', (req, res) => {
     res.json({
         status:    'ok',
-        phase:     2,
+        phase:     3,
         time_unit: process.env.TIME_UNIT || 'days',
         timestamp: new Date()
     });

@@ -5,6 +5,33 @@ const { v4: uuidv4 } = require('uuid');
 
 const BCRYPT_ROUNDS = 12;
 
+// In-memory brute-force tracker: email → { count, lockedUntil }
+const loginAttempts = new Map();
+const MAX_ATTEMPTS  = 5;
+const LOCKOUT_MS    = 15 * 60 * 1000; // 15 minutes
+
+const checkBruteForce = (email) => {
+    const entry = loginAttempts.get(email);
+    if (!entry) return null;
+    if (entry.lockedUntil && Date.now() < entry.lockedUntil) {
+        const mins = Math.ceil((entry.lockedUntil - Date.now()) / 60000);
+        return `الحساب مقفل مؤقتاً بسبب محاولات متعددة، حاول بعد ${mins} دقيقة`;
+    }
+    return null;
+};
+
+const recordFailedAttempt = (email) => {
+    const entry = loginAttempts.get(email) || { count: 0, lockedUntil: null };
+    entry.count += 1;
+    if (entry.count >= MAX_ATTEMPTS) {
+        entry.lockedUntil = Date.now() + LOCKOUT_MS;
+        entry.count = 0;
+    }
+    loginAttempts.set(email, entry);
+};
+
+const clearAttempts = (email) => loginAttempts.delete(email);
+
 const validatePassword = (password) => {
     const errors = [];
     if (password.length < 8)
@@ -18,12 +45,20 @@ const validatePassword = (password) => {
     return errors;
 };
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const register = async (req, res) => {
     try {
-        const { full_name, email, password } = req.body;
+        const full_name = (req.body.full_name || '').trim();
+        const email     = (req.body.email    || '').trim().toLowerCase();
+        const password  = req.body.password  || '';
 
         if (!full_name || !email || !password) {
             return res.status(400).json({ success: false, message: 'جميع الحقول مطلوبة' });
+        }
+
+        if (!EMAIL_RE.test(email)) {
+            return res.status(400).json({ success: false, message: 'صيغة البريد الإلكتروني غير صحيحة' });
         }
 
         const passwordErrors = validatePassword(password);
@@ -75,11 +110,18 @@ const login = async (req, res) => {
             return res.status(400).json({ success: false, message: 'البريد الإلكتروني وكلمة السر مطلوبان' });
         }
 
+        // Brute-force: check lockout before hitting DB
+        const lockMsg = checkBruteForce(email.toLowerCase());
+        if (lockMsg) {
+            return res.status(429).json({ success: false, message: lockMsg });
+        }
+
         const result = await pool.query(
             'SELECT * FROM users WHERE email = $1 AND is_active = 1', [email]
         );
 
         if (result.rows.length === 0) {
+            recordFailedAttempt(email.toLowerCase());
             return res.status(401).json({ success: false, message: 'بيانات الدخول غير صحيحة' });
         }
 
@@ -99,8 +141,11 @@ const login = async (req, res) => {
         }
 
         if (!passwordValid) {
+            recordFailedAttempt(email.toLowerCase());
             return res.status(401).json({ success: false, message: 'بيانات الدخول غير صحيحة' });
         }
+
+        clearAttempts(email.toLowerCase()); // reset on success
 
         // If 2FA is enabled, return a temporary token instead of the full JWT
         if (user.two_fa_enabled) {
