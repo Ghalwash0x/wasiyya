@@ -1504,7 +1504,7 @@ git config user.email "your-email@example.com"   # same as GitHub account
 |------|--------|
 | عمر عبدالعال سعد — Omar Abdelaal Saad | [@omar0y](https://github.com/omar0y) |
 | محمد أسامه محمد — Mohammed Osama Mohammed | — |
-| مصطفى علي مصطفى — Mustafa Ali Mustafa | — |
+| مصطفى علي مصطفى — Mustafa Ali Mustafa | Ghalwash0x |
 
 > Commits must use an email [linked to your GitHub account](https://github.com/settings/emails) to appear in the graph above.
 
