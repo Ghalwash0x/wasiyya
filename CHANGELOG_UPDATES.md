@@ -199,7 +199,7 @@ docker start wasiyya-mysql wasiyya-phpmyadmin
 
 ## المساهمون في هذه الجلسة
 
-تطوير وتشغيل محلي عبر Cursor — Omar / فريق وصيّة.
+Omar / فريق وصيّة.
 
 ---
 
