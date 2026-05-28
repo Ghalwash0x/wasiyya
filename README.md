@@ -27,7 +27,7 @@
 <p>
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" />
   <img src="https://img.shields.io/badge/version-4.0.0-indigo?style=flat-square" alt="Version" />
-  <img src="https://img.shields.io/badge/University%20Project-2026-orange?style=flat-square" alt="University" />
+  <img src="https://img.shields.io/badge/Computer%20%26%20Data%20Science-2026-orange?style=flat-square" alt="Faculty" />
 </p>
 
 <p>
@@ -1500,11 +1500,11 @@ git config user.email "your-email@example.com"   # same as GitHub account
   <img src="https://contrib.rocks/image?repo=omar0y/wasiyya" alt="Contributors" />
 </a>
 
-| Name | GitHub | Role |
-|------|--------|------|
-| عمر عبدالعال سعد — Omar Abdelaal Saad | [@omar0y](https://github.com/omar0y) | Full-Stack Lead |
-| محمد أسامه محمد — Mohammed Osama Mohammed | — | Backend & Database |
-| مصطفى علي مصطفى — Mustafa Ali Mustafa | — | Frontend & UI/UX |
+| Name | GitHub |
+|------|--------|
+| عمر عبدالعال سعد — Omar Abdelaal Saad | [@omar0y](https://github.com/omar0y) |
+| محمد أسامه محمد — Mohammed Osama Mohammed | — |
+| مصطفى علي مصطفى — Mustafa Ali Mustafa | — |
 
 > Commits must use an email [linked to your GitHub account](https://github.com/settings/emails) to appear in the graph above.
 
@@ -1512,13 +1512,13 @@ git config user.email "your-email@example.com"   # same as GitHub account
 
 ## 👥 Team
 
-| Name | ID | Role |
-|------|----|------|
-| عمر عبدالعال سعد — Omar Abdelaal Saad | 2305165 | Full-Stack Lead |
-| محمد أسامه محمد — Mohammed Osama Mohammed | 2305180 | Backend & Database |
-| مصطفى علي مصطفى — Mustafa Ali Mustafa | 2305616 | Frontend & UI/UX |
+| Name | ID |
+|------|----|
+| عمر عبدالعال سعد — Omar Abdelaal Saad | 2305165 |
+| محمد أسامه محمد — Mohammed Osama Mohammed | 2305180 |
+| مصطفى علي مصطفى — Mustafa Ali Mustafa | 2305616 |
 
-**Supervisor:** Faculty of Engineering — Software Engineering Department  
+**Supervisor:** Faculty of Computer and Data Science  
 **Academic Year:** 2025 / 2026
 
 ---
@@ -1561,7 +1561,7 @@ OTHER LIABILITY ARISING FROM USE OF THE SOFTWARE.
 *Digital Will Management System*
 
 Built with Node.js · React · MySQL  
-University Software Engineering Project — 2026
+Faculty of Computer and Data Science — 2026
 
 <br/>
 
